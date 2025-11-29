@@ -84,9 +84,9 @@ class SchedulerConfig:
 
 @dataclass
 class LoggingConfig:
-    wandb: bool = False
-    wandb_project: str = 'tridi'
-    wandb_entity: str = ''
+    wandb: bool = True
+    wandb_project: str = 'HH-Gen'
+    wandb_entity: str = 'c-yang'
 # ============================================================
 
 # ========================= SAMPLE ===========================

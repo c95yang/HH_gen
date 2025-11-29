@@ -86,19 +86,17 @@ class Trainer:
 
         for key, weight in self.cfg.train.losses.items():
             if key == "smpl_v2v":
-
                 gt_sbj_vertices = batch.sbj_vertices.to(output.sbj_vertices.device)
                 pred_sbj_vertices = output.sbj_vertices
-
-                gt_second_sbj_vertices  = batch.second_sbj_vertices.to(output.sbj_vertices.device)
-                pred_second_sbj_vertices = output.sbj_vertices
-
                 loss_i = F.mse_loss(pred_sbj_vertices, gt_sbj_vertices, reduction='none')
-                loss_i += F.mse_loss(pred_second_sbj_vertices, gt_second_sbj_vertices, reduction='none')
-
+            elif key == "second_smpl_v2v":
+                gt_second_sbj_vertices  = batch.second_sbj_vertices.to(output.second_sbj_vertices.device)
+                pred_second_sbj_vertices = output.second_sbj_vertices
+                loss_i = F.mse_loss(pred_second_sbj_vertices, gt_second_sbj_vertices, reduction='none')
             elif key.startswith("denoise"):
                 loss_i = denoise_loss[key]
             else:
+                print("No implementation for ", key)
                 raise NotImplementedError(f"No implementation for {key} loss.")
 
             loss_i = loss_i.mean()

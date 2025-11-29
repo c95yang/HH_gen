@@ -40,6 +40,7 @@ class DenoisingModel(ModelMixin):
         """ Receives input of shape (B, in_channels) and returns output
             of shape (B, out_channels) """
         if self.name.endswith('unidiffuser_3'):
+            # print("Using unidiffuser 3 way model")
             with self.autocast_context:
                 sbj, second_sbj = torch.split(
                     inputs,

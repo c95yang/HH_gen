@@ -38,6 +38,8 @@ class TriDiModelOutput:
     timesteps_second_sbj: Optional[Tensor] = None
 
     # posed meshes for loss computation
+    sbj_vertices: Optional[Tensor] = None
+    second_sbj_vertices: Optional[Tensor] = None
     sbj_joints: Optional[Tensor] = None
     second_sbj_joints: Optional[Tensor] = None
 
@@ -152,13 +154,9 @@ class BaseTriDiModel(ModelMixin):
         x_t: Tensor,
         t: Optional[Tensor],
         t_aux: Optional[Tensor] = None,  # second timestep for unidiffuser
-        obj_group: Optional[Tensor] = None,
-        obj_pointnext: Optional[Tensor] = None,
-        contact_map: Optional[Tensor] = None,
     ):
         return self.conditioning_model.get_input_with_conditioning(
-            x_t, t=t, t_aux=t_aux, obj_group=obj_group,
-            obj_pointnext=obj_pointnext, contact_map=contact_map,
+            x_t, t=t, t_aux=t_aux
         )
 
     def forward_train(self, *args, **kwargs):

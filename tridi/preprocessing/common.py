@@ -232,6 +232,9 @@ class DatasetSample:
             seq_group["sbj_smpl_lh"][t] = self.sbj_smpl["left_hand_pose"]
             seq_group["sbj_smpl_rh"][t] = self.sbj_smpl["right_hand_pose"]
 
+        seq_group["second_sbj_v"][t] = self.second_sbj_mesh.vertices
+        seq_group["second_sbj_j"][t] = self.second_sbj_joints
+
         if self.second_sbj_smpl is not None:
             seq_group["second_sbj_smpl_betas"][t] = self.second_sbj_smpl["betas"]
             seq_group["second_sbj_smpl_transl"][t] = self.second_sbj_smpl["transl"]

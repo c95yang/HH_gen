@@ -19,12 +19,6 @@ model_denoising:
     num_layers: 8
     dim_feedforward: 2048
     nhead: 8
-model_conditioning:
-  use_class_conditioning: true
-  num_classes: 40
-  use_pointnext_conditioning: true
-  use_contacts: encoder_decimated_clip
-  contact_model: "gb_contacts"
 model:
   data_sbj_channels: 325
   denoise_mode: sample
@@ -41,15 +35,16 @@ dataloader:
 train:
   mixed_precision: 'no'
   limit_train_batches: null
-  log_step_freq: 1
-  checkpoint_freq: 5
-  max_steps: 30
+  log_step_freq: 5
+  checkpoint_freq: 1000
+  max_steps: 300000
   print_step_freq: 1
   limit_val_batches: null
   losses:
     denoise_1: 10.0
-    denoise_2: 5.0
+    denoise_2: 10.0
     smpl_v2v: 30.0
+    second_smpl_v2v: 30.0
 optimizer:
   type: torch
   name: AdamW

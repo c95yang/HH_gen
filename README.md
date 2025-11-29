@@ -68,21 +68,19 @@ python main.py -c config/env.yaml scenarios/gb_main.yaml -- \
 
 
 ```bash
-python main.py -c config/env.yaml scenarios/gb_main.yaml -- \
-  run.job=sample run.name=001_gb_main sample.target=meshes \
-  resume.checkpoint="./assets/gb_main.pth" \
-  dataloader.batch_size=256 sample.mode="sample_101" \
-  run.datasets=["behave"] sample.dataset=normal sample.repetitions=1 \
-  model.cg_apply=True model.cg_scale=2.0
+python main.py -c config/env.yaml scenarios/mirror.yaml -- \
+  run.job=sample run.name=01_mirrot sample.target=meshes \
+  resume.checkpoint="experiments/000_01_mirror/checkpoints/checkpoint-step-0018000.pth" \
+  dataloader.batch_size=2048 sample.mode="sample_01" \
+  run.datasets=["behave"] sample.dataset=normal sample.repetitions=1 
 ```
 
 
 Use the command below to run evaluation on the generated samples. The `eval.sampling_target` parameter controls 
 which modalities are evaluated (possible values: `sbj_contact`, `obj_contact`,):
 ```bash
-python main.py -c config/env.yaml scenarios/gb_main.yaml -- \
-  run.job=eval run.name=001_gb_main resume.step=-1 \
-  eval.sampling_target=['sbj_contact'] 
+python main.py -c config/env.yaml scenarios/mirror.yaml -- \
+  run.job=eval run.name=01_mirror resume.step=-1 
 ```
 
 ## Training
@@ -92,8 +90,8 @@ python main.py -c config/env.yaml scenarios/gb_main.yaml -- \
   run.name=001_gb_main run.job=train
 
 ```bash
-python main.py -c config/env.yaml scenarios/symmetry.yaml -- \
-  run.name=001_symmetry run.job=train
+python main.py -c config/env.yaml scenarios/mirror.yaml -- \
+  run.name=01_mirror run.job=train
 ```
 
 ## Citation

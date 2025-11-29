@@ -85,7 +85,7 @@ class MeshModel:
         return sbj_vertices, sbj_joints
 
     def get_meshes_th(
-        self, output: TriDiModelOutput, obj_class, scale=1.0,
+        self, output: TriDiModelOutput, scale=1.0,
         sbj_gender=None, return_joints=False
     ):
         B = min(self.batch_size, len(output))
@@ -104,34 +104,29 @@ class MeshModel:
         }
 
         # get sbj mesh
-        sbj_vertices, sbj_joints = self.get_smpl_th(body_model_params, sbj_gender)
+        sbj_vertices, sbj_joints = self.get_smpl_th_single(body_model_params, sbj_gender)
 
-        # obj mesh
-        obj_R = output.obj_R.reshape(B, 1, 6)
-        obj_R = rotation_6d_to_matrix(obj_R).reshape(B, 3, 3)
+        # second subject
+        second_sbj_pose = output.second_sbj_pose.reshape(B, -1, 6)
+        second_sbj_pose = rotation_6d_to_matrix(second_sbj_pose).reshape(B, -1, 9)
+        second_sbj_global = output.second_sbj_global.reshape(B, 1, 6)
+        second_sbj_global = rotation_6d_to_matrix(second_sbj_global).reshape(B, 1, 9)
+        second_body_model_params = {
+            "betas": output.second_sbj_shape,
+            "transl": output.second_sbj_c,
+            "global_orient": second_sbj_global,
+            "body_pose": second_sbj_pose[:, :21],
+            "left_hand_pose": second_sbj_pose[:, 21: 21 + 15],
+            "right_hand_pose": second_sbj_pose[:, 21 + 15:]
+        }
+        # get second sbj mesh
+        second_sbj_vertices, second_sbj_joints = self.get_smpl_th_single(second_body_model_params, sbj_gender)
 
-        # we use list here to get rid of dependency on Pointclouds from pytorch3d
-        obj_cls_list = obj_class.cpu().tolist()
-        obj_verts_list = [self.canonical_obj_pcs[int(c)].clone() for c in obj_cls_list]  # each is (n_i, 3)
-        max_n = max(v.shape[0] for v in obj_verts_list)
-        obj_vertices = torch.zeros((B, max_n, 3), dtype=obj_verts_list[0].dtype)
-        for i, v in enumerate(obj_verts_list):
-            obj_vertices[i, : v.shape[0]] = v
-        obj_vertices = obj_vertices.to(self.device)
-
-        # Pose object
-        obj_vertices = torch.bmm(obj_R, obj_vertices.transpose(2, 1)).transpose(2, 1)
-        obj_vertices += output.obj_c.unsqueeze(1)
-
-        # Optionally apply scale
-        sbj_vertices, obj_vertices, sbj_joints = self._apply_scale(
-            sbj_vertices, obj_vertices, sbj_joints, scale
-        )
 
         if return_joints:
-            return sbj_vertices, obj_vertices, sbj_joints
+            return sbj_vertices, sbj_joints, second_sbj_vertices, second_sbj_joints
         else:
-            return sbj_vertices, obj_vertices
+            return sbj_vertices, second_sbj_vertices
 
     def get_meshes_wkpts_th(
         self, output: TriDiModelOutput, scale=1.0,
@@ -192,61 +187,56 @@ class MeshModel:
         return self
 
     @torch.no_grad()
-    def get_meshes(self, output: TriDiModelOutput, obj_class, scale=1.0, sbj_gender=None):
-        sbj_vertices, obj_vertices = self.get_meshes_th(output, obj_class, scale, sbj_gender)
+    def get_meshes(self, output: TriDiModelOutput,scale=1.0, sbj_gender=None):
+        sbj_vertices, obj_vertices = self.get_meshes_th(output, scale, sbj_gender)
 
         # create subject mesh
         sbj_vertices = sbj_vertices.cpu().numpy()
         sbj_faces = self.smpl_m.faces
         sbj_meshes = [trimesh.Trimesh(sbj_vertices[j], sbj_faces) for j in range(sbj_vertices.shape[0])]
 
-        # create object mesh
-        obj_meshes = []
-        obj_vertices = obj_vertices.cpu().numpy()
-        for j in range(obj_vertices.shape[0]):
-            canonical_obj_mesh = self.canonical_obj_meshes[obj_class[j].cpu().item()]
-            obj_meshes.append(
-                trimesh.Trimesh(
-                    obj_vertices[j, : len(canonical_obj_mesh.vertices)],
-                    canonical_obj_mesh.faces
-                )
-            )
+        # second subject mesh
+        second_sbj_vertices = obj_vertices.cpu().numpy()
+        second_sbj_faces = self.smpl_m.faces
+        second_sbj_meshes = [trimesh.Trimesh(second_sbj_vertices[j], second_sbj_faces) for j in range(second_sbj_vertices.shape[0])]
 
-        return sbj_meshes, obj_meshes
+        return sbj_meshes, second_sbj_meshes
 
     def get_smpl_th(self, params: Union[Dict, HHBatchData], sbj_gender=None):
-        if isinstance(params, HHBatchData):
-            #print("Getting SMPL from HHBatchData", params.to_string())
-            B = len(params['sbj_shape'])
-            sbj_gender = params.sbj_gender
+        if not isinstance(params, HHBatchData):
+            raise ValueError("params must be an instance of HHBatchData")
 
-            sbj_pose = params['sbj_pose'].reshape(B, -1, 6)
-            sbj_pose = rotation_6d_to_matrix(sbj_pose).reshape(B, -1, 9).float()
-            sbj_global = params['sbj_global'].reshape(B, 1, 6)
-            sbj_global = rotation_6d_to_matrix(sbj_global).reshape(B, 1, 9).float()
+        #print("Getting SMPL from HHBatchData", params.to_string())
+        B = len(params['sbj_shape'])
+        sbj_gender = params.sbj_gender
 
-            body_model_params = {
-                "betas": params['sbj_shape'],
-                "transl": params['sbj_c'],
-                "global_orient": sbj_global,
-                "body_pose": sbj_pose[:, :21],
-                "left_hand_pose": sbj_pose[:, 21:36],
-                "right_hand_pose": sbj_pose[:, 36:]
-            }
+        sbj_pose = params['sbj_pose'].reshape(B, -1, 6)
+        sbj_pose = rotation_6d_to_matrix(sbj_pose).reshape(B, -1, 9).float()
+        sbj_global = params['sbj_global'].reshape(B, 1, 6)
+        sbj_global = rotation_6d_to_matrix(sbj_global).reshape(B, 1, 9).float()
 
-            second_sbj_pose = params['second_sbj_pose'].reshape(B, -1, 6)
-            second_sbj_pose = rotation_6d_to_matrix(second_sbj_pose).reshape(B, -1, 9).float()
-            second_sbj_global = params['second_sbj_global'].reshape(B, 1, 6)
-            second_sbj_global = rotation_6d_to_matrix(second_sbj_global).reshape(B, 1, 9).float()
+        body_model_params = {
+            "betas": params['sbj_shape'],
+            "transl": params['sbj_c'],
+            "global_orient": sbj_global,
+            "body_pose": sbj_pose[:, :21],
+            "left_hand_pose": sbj_pose[:, 21:36],
+            "right_hand_pose": sbj_pose[:, 36:]
+        }
 
-            second_body_model_params = {
-                "betas": params['second_sbj_shape'],
-                "transl": params['second_sbj_c'],
-                "global_orient": second_sbj_global,
-                "body_pose": second_sbj_pose[:, :21],
-                "left_hand_pose": second_sbj_pose[:, 21:36],
-                "right_hand_pose": second_sbj_pose[:, 36:]
-            }
+        second_sbj_pose = params['second_sbj_pose'].reshape(B, -1, 6)
+        second_sbj_pose = rotation_6d_to_matrix(second_sbj_pose).reshape(B, -1, 9).float()
+        second_sbj_global = params['second_sbj_global'].reshape(B, 1, 6)
+        second_sbj_global = rotation_6d_to_matrix(second_sbj_global).reshape(B, 1, 9).float()
+
+        second_body_model_params = {
+            "betas": params['second_sbj_shape'],
+            "transl": params['second_sbj_c'],
+            "global_orient": second_sbj_global,
+            "body_pose": second_sbj_pose[:, :21],
+            "left_hand_pose": second_sbj_pose[:, 21:36],
+            "right_hand_pose": second_sbj_pose[:, 36:]
+        }
 
         B = min(self.batch_size, len(body_model_params['betas']))
         body_model_params = {k: v.to(self.device) for k, v in body_model_params.items()}

@@ -25,14 +25,20 @@ class TriDiModel(BaseTriDiModel):
         self.scheduler_aux_1 = deepcopy(self.schedulers_map['ddpm'])  # auxiliary scheduler for second subject
         trange = torch.arange(1, self.scheduler.config.num_train_timesteps, dtype=torch.long)
         tzeros = torch.zeros_like(trange)
+        # self.sparse_timesteps = torch.cat([
+        #     torch.stack([tzeros, trange, trange], dim=1),
+        #     torch.stack([trange, tzeros, trange], dim=1),
+        #     torch.stack([trange, trange, tzeros], dim=1),
+        #     torch.stack([trange, trange, trange], dim=1),
+        #     torch.stack([tzeros, tzeros, trange], dim=1),
+        #     torch.stack([tzeros, trange, tzeros], dim=1),
+        #     torch.stack([trange, tzeros, tzeros], dim=1),
+        # ])
         self.sparse_timesteps = torch.cat([
-            torch.stack([tzeros, trange, trange], dim=1),
-            torch.stack([trange, tzeros, trange], dim=1),
-            torch.stack([trange, trange, tzeros], dim=1),
-            torch.stack([trange, trange, trange], dim=1),
-            torch.stack([tzeros, tzeros, trange], dim=1),
-            torch.stack([tzeros, trange, tzeros], dim=1),
-            torch.stack([trange, tzeros, tzeros], dim=1),
+            torch.stack([tzeros, trange], dim=1),
+            torch.stack([trange, tzeros], dim=1),
+            torch.stack([trange, trange], dim=1),
+            torch.stack([tzeros, tzeros], dim=1)
         ])
 
     def forward_train(
@@ -164,31 +170,26 @@ class TriDiModel(BaseTriDiModel):
         device = self.device
 
         # Choose noise dimensionality
-        D_sbj, D_obj, D_contact = self.data_sbj_channels, self.data_obj_channels, self.data_contacts_channels
+        D_sbj = self.data_sbj_channels
         D = 0
 
         # sample noise and get conditioning
-        x_sbj_cond, x_obj_cond, x_contact_cond = torch.empty(0), torch.empty(0), torch.empty(0)
+        x_sbj_cond, x_second_sbj_cond = torch.empty(0), torch.empty(0)
         if mode[0] == "1":
             x_t_sbj = torch.randn(B, D_sbj, device=device)
             D += D_sbj
         else:
-            x_sbj_cond = self.merge_input_sbj(batch).to(device)
+            x_sbj_cond, _ = self.merge_input_sbj(batch)
+            x_sbj_cond = x_sbj_cond.to(device)
             x_t_sbj = x_sbj_cond.detach().clone()
 
         if mode[1] == "1":
-            x_t_obj = torch.randn(B, D_obj, device=device)
-            D += D_obj
+            x_t_second_sbj = torch.randn(B, D_sbj, device=device)
+            D += D_sbj
         else:
-            x_obj_cond = self.merge_input_obj(batch).to(device)
-            x_t_obj = x_obj_cond.detach().clone()
-
-        if mode[2] == "1":
-            x_t_contact = torch.randn(B, D_contact, device=device)
-            D += D_contact
-        else:
-            x_contact_cond = batch.sbj_contacts.to(device)
-            x_t_contact = x_contact_cond.detach().clone()
+            _, x_second_sbj_cond = self.merge_input_sbj(batch)
+            x_second_sbj_cond = x_second_sbj_cond.to(device)
+            x_t_second_sbj = x_second_sbj_cond.detach().clone()
 
         if D == 0:
             raise NotImplementedError('Unknown forward mode: {}'.format(mode))
@@ -207,16 +208,6 @@ class TriDiModel(BaseTriDiModel):
         accepts_eta = "eta" in set(inspect.signature(scheduler.step).parameters.keys())
         extra_step_kwargs = {"eta": eta} if accepts_eta else {}
 
-        # Manage conditioning
-        obj_class, obj_group = None, None
-        obj_pointnext = None
-        # Get conditioning from batch
-        if self.conditioning_model.use_class_conditioning:
-            obj_class = batch.obj_class.to(device)
-            obj_group = batch.obj_group.to(device)
-        if self.conditioning_model.use_pointnext_conditioning:
-            obj_pointnext = batch.obj_pointnext.to(device)
-
         # Loop over timesteps
         all_outputs = []
         return_all_outputs = (return_sample_every_n_steps > 0)
@@ -224,30 +215,23 @@ class TriDiModel(BaseTriDiModel):
         for i, t in enumerate(progress_bar):
             # Construct input based on sampling mode
             t_sbj = t if mode[0] == "1" else torch.zeros_like(t)
-            t_obj = t if mode[1] == "1" else torch.zeros_like(t)
-            t_contact = t if mode[2] == "1" else torch.zeros_like(t)
-
-            _x_t = torch.cat([x_t_sbj, x_t_obj], dim=1)
-            _x_t_contact = x_t_contact
+            t_second_sbj = t if mode[1] == "1" else torch.zeros_like(t)
+            
+            _x_t = torch.cat([x_t_sbj, x_t_second_sbj], dim=1)
 
             with torch.no_grad():
                 # Conditioning
                 x_t_input = self.get_input_with_conditioning(
-                    _x_t, obj_group=obj_group, contact_map=_x_t_contact,
-                    t=t_sbj, t_aux=t_obj, obj_pointnext=obj_pointnext
+                    _x_t, t=t_sbj, t_aux=t_second_sbj
                 )
+
                 # Forward (pred is either noise or x_0)
                 _pred = self.denoising_model(
-                    x_t_input, t_sbj.reshape(1).expand(B), t_obj.reshape(1).expand(B), t_contact.reshape(1).expand(B)
+                    x_t_input, t_sbj.reshape(1).expand(B), t_second_sbj.reshape(1).expand(B)
                 )
 
             # Step
             t = t.item()
-            if self.cg_apply and t < self.cg_t_stamp:
-                guidance = self.get_prediction_from_cg(
-                    mode, _pred, x_sbj_cond, x_obj_cond, x_contact_cond, batch, t
-                )
-                extra_step_kwargs["guidance"] = guidance
 
             # Select part of the output based on the sampling mode
             pred = []
@@ -274,10 +258,11 @@ class TriDiModel(BaseTriDiModel):
             D_off = 0
             if mode[0] == "1":
                 x_t_sbj = x_t[:, :D_sbj]
+                D_off += D_sbj
             else:
                 x_t_sbj = x_sbj_cond
             if mode[1] == "1":
-                x_t_second_sbj = x_t[:, D_sbj:D_sbj + D_sbj]
+                x_t_second_sbj = x_t[:, D_off:D_off + D_sbj]
             else:
                 x_t_second_sbj = x_second_sbj_cond
 

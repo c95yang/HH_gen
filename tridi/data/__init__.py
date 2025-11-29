@@ -114,20 +114,6 @@ def get_eval_dataloader(cfg: ProjectConfig):
             dataset_kwargs = {
                 "split_file": cfg.behave.test_split_file,
             }
-        elif dataset_name == 'grab':
-            dataset_config = cfg.grab
-            dataset_kwargs = dict()
-        elif dataset_name == 'intercap':
-            dataset_config = cfg.intercap
-            dataset_kwargs = dict()
-        elif dataset_name == 'omomo':
-            dataset_config = cfg.omomo
-            dataset_kwargs = dict()
-        elif dataset_name == 'custom':
-            dataset_config = cfg.custom
-            dataset_kwargs = {
-                "split_file": cfg.custom.test_split_file,
-            }
         else:
             raise NotImplementedError(f'Unknown dataset: {dataset_name}')
 
@@ -135,14 +121,8 @@ def get_eval_dataloader(cfg: ProjectConfig):
             name=dataset_config.name,
             root=Path(dataset_config.root),
             split='test',
-            objects=dataset_config.objects,
-            obj2classid=dataset_config.obj2classid,
-            obj2groupid=dataset_config.obj2groupid,
             downsample_factor=1,
             subjects=dataset_config.test_subjects,
-            actions=dataset_config.test_actions,
-            include_contacts=cfg.model_conditioning.use_contacts,
-            include_pointnext=cfg.model_conditioning.use_pointnext_conditioning,
             assets_folder=Path(cfg.env.assets_folder),
             fps=dataset_config.fps_eval,
             **dataset_kwargs
@@ -152,16 +132,14 @@ def get_eval_dataloader(cfg: ProjectConfig):
         datasets.append(dataset)
 
     # create dataloaders
-    dataloaders, canonical_obj_meshes, canonical_obj_keypoints = [], dict(), dict()
+    dataloaders = []
     for dataset in datasets:
         dataloader = torch.utils.data.DataLoader(
             dataset, batch_size=cfg.dataloader.batch_size, num_workers=cfg.dataloader.workers,
             shuffle=False, pin_memory=True, collate_fn=HHBatchData.collate
         )
 
-        canonical_obj_meshes.update(dataset.canonical_obj_meshes)
-        canonical_obj_keypoints.update(dataset.canonical_obj_keypoints)
         dataloaders.append(dataloader)
         logger.info(f"Eval data length for {dataset.name}: {len(dataset)}")
 
-    return dataloaders, canonical_obj_meshes, canonical_obj_keypoints
+    return dataloaders
