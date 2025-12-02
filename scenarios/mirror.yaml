@@ -35,7 +35,7 @@ dataloader:
 train:
   mixed_precision: 'no'
   limit_train_batches: null
-  log_step_freq: 5
+  log_step_freq: 100
   checkpoint_freq: 1000
   max_steps: 300000
   print_step_freq: 1

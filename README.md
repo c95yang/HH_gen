@@ -69,9 +69,9 @@ python main.py -c config/env.yaml scenarios/gb_main.yaml -- \
 
 ```bash
 python main.py -c config/env.yaml scenarios/mirror.yaml -- \
-  run.job=sample run.name=01_mirrot sample.target=meshes \
-  resume.checkpoint="experiments/000_01_mirror/checkpoints/checkpoint-step-0018000.pth" \
-  dataloader.batch_size=2048 sample.mode="sample_01" \
+  run.job=sample run.name=01_mirror sample.target=meshes \
+  resume.checkpoint="experiments/001_01_mirror/checkpoints/checkpoint-step-0003000.pth" \
+  dataloader.batch_size=256 sample.mode="sample_01" \
   run.datasets=["behave"] sample.dataset=normal sample.repetitions=1 
 ```
 

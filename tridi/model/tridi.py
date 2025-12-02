@@ -71,12 +71,8 @@ class TriDiModel(BaseTriDiModel):
         x_t = torch.cat([sbj_t, second_sbj_t], dim=1)
 
         # Conditioning
-        # x_t_input = self.get_input_with_conditioning(
-        #     x_t, obj_group=obj_group,
-        #     contact_map=contact_t, t=timestep_sbj, t_aux=timestep_obj,
-        #     obj_pointnext=obj_pointnext
-        # )
-        x_t_input = x_t
+        x_t_input = self.get_input_with_conditioning(x_t)
+        # x_t_input = x_t
 
         # Forward
         if self.denoise_mode == 'sample':
