@@ -321,7 +321,7 @@ def preprocess(cfg):
             sbj_faces = sbj_model.faces
             sbj_mesh = trimesh.Trimesh(vertices=sbj_verts[i], faces=sbj_faces)
             # save sbj mesh
-            sbj_mesh.export(target_folder / f"{seq_subject}_sbj_{i}.ply")
+            sbj_mesh.export(target_folder / f"{seq_subject}_sbj_{i}_before.ply")
 
         # =============Second sbj==============================
         # second_body_model_params = apply_symmetry_sbj(deepcopy(body_model_params))    
@@ -351,7 +351,7 @@ def preprocess(cfg):
             second_sbj_faces = second_sbj_model.faces
             second_sbj_mesh = trimesh.Trimesh(vertices=second_sbj_verts[i], faces=second_sbj_faces)
             # save sbj mesh
-            second_sbj_mesh.export(target_folder / f"{seq_subject}_second_sbj_{i}.ply")
+            second_sbj_mesh.export(target_folder / f"{seq_subject}_second_sbj_{i}_before.ply")
         # ===========================================
 
         # ============ 5 Align the ground plane ============  
@@ -433,7 +433,12 @@ def preprocess(cfg):
                 },
                 preprocess_transforms=preprocess_transforms[t]
             )
-            result = preprocess_worker(sample, cfg.normalize)
+
+            result = preprocess_worker(sample)
+
+            result.sbj_mesh.export(target_folder / f"{seq_subject}_sbj_{t}_after.ply")
+            result.second_sbj_mesh.export(target_folder / f"{seq_subject}_second_sbj_{t}_after.ply")
+
             preprocess_results.append(result)
         # ===========================================
 

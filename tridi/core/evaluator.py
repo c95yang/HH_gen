@@ -16,8 +16,8 @@ class Evaluator:
 
     def evaluate(self):
         #base_samples_folder = (Path(self.cfg.run.path) / "artifacts" / f"step_{self.cfg.resume.step}_samples")
-        base_samples_folder = Path("experiments/001_01_mirror/artifacts/step_-1_samples")
-        print(base_samples_folder)
+        base_samples_folder = Path("experiments/000_01_mirror/artifacts/step_-1_samples")
+        # print(base_samples_folder)
 
         logger.info(f"Experiment: {self.cfg.run.name} step: {self.cfg.resume.step}")
         # Generation
