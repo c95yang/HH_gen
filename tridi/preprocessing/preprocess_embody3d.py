@@ -339,7 +339,7 @@ if __name__ == "__main__":
     split(config)
 
     # preprocess data
-    #preprocess(config)
+    preprocess(config)
 
 #python -m tridi.preprocessing.preprocess_embody3d -c ./config/env.yaml -- embody3d.split="train" embody3d.downsample="10fps"
 #python -m tridi.preprocessing.preprocess_embody3d -c ./config/env.yaml -- embody3d.split="test" embody3d.downsample="1fps"
