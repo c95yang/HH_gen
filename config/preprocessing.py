@@ -26,14 +26,29 @@ class PreprocessBehaveConfig:
     # Downsample from to 10fps or 1fps, only applicable to 30fps data
     downsample: str = "10fps"
     # Preprocess only selected subjects
-    subjects: List = field(default_factory=lambda: ["Sub01"]) # ["*"])
-    # Preprocess only selected object
+    subjects: List = field(default_factory=lambda: ["*"])
+    # Preprocess only selected objects
     objects: List = field(default_factory=lambda: ["yogamat"])
     # Threshold for computing human-object contacts (if no precomputed contacts are provided)
     contact_threshold: float = 0.020
     # Generate object keypoints after preprocessing
     generate_obj_keypoints: bool = False
 
+@dataclass
+class PreprocessEmbody3DConfig:
+    # paths
+    root: str = os.path.join("${env.raw_datasets_folder}", "embody3d/")
+    target: str = os.path.join("${env.datasets_folder}", "embody3d_smplh/")
+
+    # Split (needed to correctly set resulting filename)
+    split: str = "train"  # "train", "test"
+    # Path to a split_file (for selecting sequences based on split)
+    split_file: str = os.path.join("${embody3d.root}", "split.json")
+    downsample: str = "10fps" # "None", "30fps", "10fps", "1fps"
+    # Use modified meshes with fewer vertices
+    use_decimated_obj_meshes: bool = True
+    # Preprocess only selected categaories
+    categories: List = field(default_factory=lambda: ["*"])
 
 @dataclass
 class PreprocessGrabConfig:
@@ -136,6 +151,7 @@ class PreprocessConfig:
 
     # datasets
     behave: PreprocessBehaveConfig = PreprocessBehaveConfig()
+    embody3d: PreprocessEmbody3DConfig = PreprocessEmbody3DConfig()
     grab: PreprocessGrabConfig = PreprocessGrabConfig()
     intercap: PreprocessIntercapConfig = PreprocessIntercapConfig()
     omomo: PreprocessOmomoConfig = PreprocessOmomoConfig()

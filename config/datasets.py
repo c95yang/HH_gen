@@ -28,8 +28,8 @@ class DatasetConfig:
     fps_eval: int = 1
     augment_rotation: bool = True
     augment_symmetry: bool = True
-    max_timestamps: Optional[int] = None  # 限制每个序列的最大timestamp数量
-    filter_subjects: Optional[List[str]] = None  # 只加载指定的subjects，如 ["Sub01_train"]
+    max_timestamps: Optional[int] = None  
+    filter_subjects: Optional[List[str]] = None 
 
 
 @dataclass
@@ -58,6 +58,25 @@ class BehaveConfig(DatasetConfig):
     test_actions: Optional[List[str]] = None
     test_split_file: Optional[str] = os.path.join("${env.assets_folder}", "behave_test.json")
 
+@dataclass
+class Embody3DConfig(DatasetConfig):
+    # fields should match the fields in HOIDataset class
+    name: str = 'embody3d'
+    root: str = os.path.join("${env.datasets_folder}", "embody3d_smplh")
+
+    objects: List[str] = None
+    obj2groupid: Dict[str, int] = None
+    obj2classid:  Dict[str, int] = None
+
+    # One has to specify either subjects and actions or split_file
+    train_subjects: Optional[List[str]] = None
+    train_actions: Optional[List[str]] = None
+    train_split_file: Optional[str] = os.path.join("${env.assets_folder}", "embody3d_train.json")
+
+    # One has to specify either subjects and actions or split_file
+    test_subjects: Optional[List[str]] = None
+    test_actions: Optional[List[str]] = None
+    test_split_file: Optional[str] = os.path.join("${env.assets_folder}", "embody3d_test.json")
 
 @dataclass
 class GrabConfig(DatasetConfig):

@@ -34,6 +34,8 @@ import numpy as np
 import torch
 import trimesh
 from omegaconf import OmegaConf
+import re
+import os
 
 from config.preprocessing import PreprocessConfig
 
@@ -133,6 +135,24 @@ def get_sequences_list(dataset, input_path, subjects=None, objects=None):
         else:
             for sbj in subjects:
                 all_seqs.extend(list(input_path.glob(f'*_{sbj}_*/')))
+    elif dataset == "embody3d":
+        # sequences w. 2, 3, 4 people
+        not_filtered = []
+        for sbj in subjects:
+            not_filtered.extend(list(input_path.glob(f'{sbj}/*')))
+
+        # 
+        pattern = re.compile(r"^[A-Z]{3}\d{3}$")
+        # count subjects
+        for sequence in not_filtered:
+            count = 0
+            if sequence.is_dir():
+                for subfolder in sorted(os.listdir(sequence)):
+                    if Path(sequence/subfolder).is_dir() and pattern.match(subfolder):
+                        count += 1
+                # append if 2 subjects
+                if count == 2:
+                    all_seqs.append(sequence)
     return all_seqs
 
 
@@ -141,7 +161,6 @@ def add_meatada_to_hdf5(seq_group, sbj, T, gender=""):
     seq_group.attrs['T'] = T
     seq_group.attrs['gender'] = gender
 
-
 def add_sequence_datasets_to_hdf5(seq_group, sample, T):
     # object mesh
     # if sample.obj_mesh is not None:
@@ -149,9 +168,9 @@ def add_sequence_datasets_to_hdf5(seq_group, sample, T):
     #     seq_group.create_dataset("obj_v", shape=(T, obj_v.shape[0], 3))
     #     seq_group.create_dataset("obj_f", shape=(obj_f.shape[0], 3), data=obj_f)
     # subject mesh
-    sbj_v, sbj_f = sample.sbj_mesh.vertices, sample.sbj_mesh.faces
-    seq_group.create_dataset("sbj_v", shape=(T, sbj_v.shape[0], 3))
-    seq_group.create_dataset("sbj_f", shape=(sbj_f.shape[0], 3), data=sbj_f)
+    #sbj_v, sbj_f = sample.sbj_mesh.vertices, sample.sbj_mesh.faces
+    #seq_group.create_dataset("sbj_v", shape=(T, sbj_v.shape[0], 3))
+    #seq_group.create_dataset("sbj_f", shape=(sbj_f.shape[0], 3), data=sbj_f)
     # subject joints
     seq_group.create_dataset("sbj_j", shape=(T, sample.sbj_joints.shape[0], 3))
     # subject features
@@ -169,9 +188,9 @@ def add_sequence_datasets_to_hdf5(seq_group, sample, T):
 
 
     # second subject mesh
-    second_sbj_v, second_sbj_f = sample.second_sbj_mesh.vertices, sample.second_sbj_mesh.faces
-    seq_group.create_dataset("second_sbj_v", shape=(T, second_sbj_v.shape[0], 3))
-    seq_group.create_dataset("second_sbj_f", shape=(second_sbj_f.shape[0], 3), data=second_sbj_f)
+    #second_sbj_v, second_sbj_f = sample.second_sbj_mesh.vertices, sample.second_sbj_mesh.faces
+    #seq_group.create_dataset("second_sbj_v", shape=(T, second_sbj_v.shape[0], 3))
+    #seq_group.create_dataset("second_sbj_f", shape=(second_sbj_f.shape[0], 3), data=second_sbj_f)
     # second subject joints
     seq_group.create_dataset("second_sbj_j", shape=(T, sample.second_sbj_joints.shape[0], 3))
     # second subject features
@@ -200,11 +219,9 @@ class DatasetSample:
     #action: str
     t_stamp: int
     # Meshes and PCs
+    # first subject features
     sbj_mesh: trimesh.Trimesh
-    # obj_mesh: Union[trimesh.Trimesh, None]
     sbj_pc: np.ndarray
-    #obj_verts: np.ndarray
-    # subject features
     sbj_joints: np.ndarray
     sbj_smpl: Union[dict, None]  # body model parameters
     # second subject features
@@ -222,7 +239,7 @@ class DatasetSample:
     def dump_hdf5(self, seq_group):
         t = self.t_stamp
         # save data to hdf5
-        seq_group["sbj_v"][t] = self.sbj_mesh.vertices
+        #seq_group["sbj_v"][t] = self.sbj_mesh.vertices
         seq_group["sbj_j"][t] = self.sbj_joints
         if self.sbj_smpl is not None:
             seq_group["sbj_smpl_betas"][t] = self.sbj_smpl["betas"]
@@ -232,7 +249,7 @@ class DatasetSample:
             seq_group["sbj_smpl_lh"][t] = self.sbj_smpl["left_hand_pose"]
             seq_group["sbj_smpl_rh"][t] = self.sbj_smpl["right_hand_pose"]
 
-        seq_group["second_sbj_v"][t] = self.second_sbj_mesh.vertices
+        #seq_group["second_sbj_v"][t] = self.second_sbj_mesh.vertices
         seq_group["second_sbj_j"][t] = self.second_sbj_joints
 
         if self.second_sbj_smpl is not None:

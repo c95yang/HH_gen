@@ -3,7 +3,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from pathlib import Path
 import os
 
-from .datasets import BehaveConfig, GrabConfig, InterCapConfig, OmomoConfig, CustomDatasetConfig
+from .datasets import BehaveConfig, Embody3DConfig, GrabConfig, InterCapConfig, OmomoConfig, CustomDatasetConfig
 from .model import ConditioningModelConfig, DenoisingModelConfig, TriDiModelConfig
 from .environment import EnvironmentConfig
 
@@ -120,6 +120,7 @@ class EvalConfig:
 @dataclass
 class ProjectConfig:
     behave: BehaveConfig = BehaveConfig()
+    embody3d: Embody3DConfig = Embody3DConfig()
     grab: GrabConfig = GrabConfig()
     intercap: InterCapConfig = InterCapConfig()
     omomo: OmomoConfig = OmomoConfig()
