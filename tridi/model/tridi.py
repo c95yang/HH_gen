@@ -114,10 +114,10 @@ class TriDiModel(BaseTriDiModel):
 
 
     def get_prediction_from_cg(
-        self, mode, pred, x_sbj_cond, x_second_sbj_cond, batch, t
+        self, mode, pred, x_sbj_cond, x_second_sbj_cond, x_text_condition_cond, batch, t
     ):
         device = self.device
-        D_sbj, D_second_sbj = self.data_sbj_channels, self.data_sbj_channels
+        D_sbj, D_second_sbj, D_text_condition = self.data_sbj_channels, self.data_sbj_channels, self.data_text_condition_channels
         # B = pred.shape[0]
 
         # Form output based on sampling mode
@@ -131,7 +131,12 @@ class TriDiModel(BaseTriDiModel):
         else:
             _second_sbj = x_second_sbj_cond
 
-        _output = torch.cat([_sbj, _second_sbj], dim=1)
+        if mode[2] == "1": #text condition
+            _text_condition = pred[:, D_sbj + D_second_sbj:D_sbj + D_second_sbj + D_text_condition]
+        else:
+            _text_condition = x_text_condition_cond
+
+        _output = torch.cat([_sbj, _second_sbj, _text_condition], dim=1)
 
         with torch.enable_grad():
             output = _output.clone().detach().requires_grad_(True)
@@ -142,6 +147,8 @@ class TriDiModel(BaseTriDiModel):
             grad.append(_grad[:, :D_sbj])
         if mode[1] == "1":
             grad.append(_grad[:, D_sbj:D_sbj + D_second_sbj])
+        if mode[2] == "1": #text condition
+            grad.append(_grad[:, D_sbj + D_second_sbj:D_sbj + D_second_sbj + D_text_condition])
 
         grad = torch.cat(grad, dim=1)
 
@@ -150,7 +157,7 @@ class TriDiModel(BaseTriDiModel):
     def forward_sample(
         self,
         # Sampling mode
-        mode: Tuple[int, int, int],
+        mode: Tuple[int, int],
         # Data for conditioning
         batch: HHBatchData,
         # Diffusion scheduler
@@ -169,6 +176,7 @@ class TriDiModel(BaseTriDiModel):
 
         # Choose noise dimensionality
         D_sbj = self.data_sbj_channels
+        D_second_sbj = self.data_second_sbj_channels
         D = 0
 
         # sample noise and get conditioning
@@ -188,6 +196,14 @@ class TriDiModel(BaseTriDiModel):
             _, x_second_sbj_cond = self.merge_input_sbj(batch)
             x_second_sbj_cond = x_second_sbj_cond.to(device)
             x_t_second_sbj = x_second_sbj_cond.detach().clone()
+
+        # if mode[2] == "1": #text condition
+        #     x_t_text_condition = torch.randn(B, D_text_condition, device=device)
+        #     D += D_text_condition
+        # else:
+        #     _, x_text_condition_cond = self.merge_input_sbj(batch)
+        #     x_text_condition_cond = x_text_condition_cond.to(device)
+        #     x_t_text_condition = x_text_condition_cond.detach().clone()
 
         if D == 0:
             raise NotImplementedError('Unknown forward mode: {}'.format(mode))
@@ -260,7 +276,7 @@ class TriDiModel(BaseTriDiModel):
             else:
                 x_t_sbj = x_sbj_cond
             if mode[1] == "1":
-                x_t_second_sbj = x_t[:, D_off:D_off + D_sbj]
+                x_t_second_sbj = x_t[:, D_off:D_off + D_second_sbj]
             else:
                 x_t_second_sbj = x_second_sbj_cond
 

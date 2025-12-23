@@ -96,7 +96,7 @@ class SampleConfig:
     num_inference_steps: int = 1000
     c: Optional[str] = 'ddpm_guided'
 
-    mode: str = "111"  # ('sbj', 'obj', 'contacts')
+    mode: str = "11"  # ('sbj', 'second_sbj')
     contacts_mode: str = 'heatmap'  # 'heatmap', 'clip'
 
     num_samples: int = 100

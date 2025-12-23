@@ -14,6 +14,7 @@ from config.config import ProjectConfig
 from tridi.data import get_eval_dataloader
 from tridi.model.base import TriDiModelOutput
 from tridi.model.wrappers.contact import ContactModel
+from tridi.model.wrappers.text_condition import TextConditionModel
 from tridi.model.wrappers.mesh import MeshModel
 from tridi.utils.geometry import rotation_6d_to_matrix
 from tridi.utils.training import TrainState, resume_from_checkpoint
@@ -46,6 +47,8 @@ class Sampler:
         self.base_samples_folder = (Path(self.cfg.run.path) / "artifacts"
                                / f"step_{self.cfg.resume.step}_samples")
         self.base_samples_folder.mkdir(parents=True, exist_ok=True)
+
+        self.text_condition_model = TextConditionModel("clip", device=self.device)
 # 
     @torch.no_grad()
     def sample_step(self, batch) -> Tuple[TriDiModelOutput, List[str]]:
