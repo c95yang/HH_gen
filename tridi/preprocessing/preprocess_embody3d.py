@@ -150,9 +150,24 @@ def preprocess(cfg):
             npy_path2 = list(smplx_folder2.glob("*.npy"))[0]
             smplx_params2[param] = np.load(npy_path2)
 
-        T = smplx_params1["transl"].shape[0]
+        T_original = smplx_params1["transl"].shape[0]
         #print("load subject smpl param done")
-        #print(f"T:{T}")
+        #print(f"T_original:{T_original}")
+        
+        # downsample parameters if needed
+        downsample_factor = 1
+        if cfg.behave.downsample != "None":
+            if cfg.behave.downsample == "10fps":
+                downsample_factor = 3
+            elif cfg.behave.downsample == "1fps":
+                downsample_factor = 30
+        T = T_original // downsample_factor
+
+        if downsample_factor != 1:
+            for key in smplx_params1:
+                smplx_params1[key] = smplx_params1[key][::downsample_factor]
+                smplx_params2[key] = smplx_params2[key][::downsample_factor]
+
         # ============ 2 extract vertices for subject 1
         preprocess_transforms = []
 
