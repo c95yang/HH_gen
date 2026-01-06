@@ -65,12 +65,12 @@ class PreprocessCHI3DConfig:
     # paths
     root: str = os.path.join("${env.raw_datasets_folder}", "chi3d/")
     target: str = os.path.join("${env.datasets_folder}", "chi3d_smplx/")
-
+    assets:str = "${env.assets_folder}"
     # Split (needed to correctly set resulting filename)
     split: str = "train"  # "train", "test"
     # Path to a split_file (for selecting sequences based on split)
-    split_file: str = os.path.join("${interhuman.root}", "split.json")
-    downsample: str = "10fps" # "None", "30fps", "10fps", "1fps"
+    split_file: str = os.path.join("${chi3d.root}", "split.json")
+    downsample: str = "10fps" # "None", "50fps", "10fps", "1fps"
 
 @dataclass
 class PreprocessGrabConfig:
