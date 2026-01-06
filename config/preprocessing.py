@@ -38,17 +38,39 @@ class PreprocessBehaveConfig:
 class PreprocessEmbody3DConfig:
     # paths
     root: str = os.path.join("${env.raw_datasets_folder}", "embody3d/")
-    target: str = os.path.join("${env.datasets_folder}", "embody3d_smplh/")
-
+    target: str = os.path.join("${env.datasets_folder}", "embody3d_smplx/")
+    assets:str = "${env.assets_folder}"
     # Split (needed to correctly set resulting filename)
     split: str = "train"  # "train", "test"
     # Path to a split_file (for selecting sequences based on split)
     split_file: str = os.path.join("${embody3d.root}", "split.json")
     downsample: str = "10fps" # "None", "30fps", "10fps", "1fps"
-    # Use modified meshes with fewer vertices
-    use_decimated_obj_meshes: bool = True
     # Preprocess only selected categaories
     categories: List = field(default_factory=lambda: ["*"])
+
+@dataclass
+class PreprocessInterHumanConfig:
+    # paths
+    root: str = os.path.join("${env.raw_datasets_folder}", "interhuman/")
+    target: str = os.path.join("${env.datasets_folder}", "interhuman_smpl/")
+
+    # Split (needed to correctly set resulting filename)
+    split: str = "train"  # "train", "test"
+    # Path to a split_file (for selecting sequences based on split)
+    split_file: str = os.path.join("${interhuman.root}", "split.json")
+    downsample: str = "10fps" # "None", "30fps", "10fps", "1fps"
+
+@dataclass
+class PreprocessCHI3DConfig:
+    # paths
+    root: str = os.path.join("${env.raw_datasets_folder}", "chi3d/")
+    target: str = os.path.join("${env.datasets_folder}", "chi3d_smplx/")
+
+    # Split (needed to correctly set resulting filename)
+    split: str = "train"  # "train", "test"
+    # Path to a split_file (for selecting sequences based on split)
+    split_file: str = os.path.join("${interhuman.root}", "split.json")
+    downsample: str = "10fps" # "None", "30fps", "10fps", "1fps"
 
 @dataclass
 class PreprocessGrabConfig:
@@ -152,6 +174,8 @@ class PreprocessConfig:
     # datasets
     behave: PreprocessBehaveConfig = PreprocessBehaveConfig()
     embody3d: PreprocessEmbody3DConfig = PreprocessEmbody3DConfig()
+    interhuman: PreprocessInterHumanConfig = PreprocessInterHumanConfig()
+    chi3d: PreprocessCHI3DConfig = PreprocessCHI3DConfig()
     grab: PreprocessGrabConfig = PreprocessGrabConfig()
     intercap: PreprocessIntercapConfig = PreprocessIntercapConfig()
     omomo: PreprocessOmomoConfig = PreprocessOmomoConfig()

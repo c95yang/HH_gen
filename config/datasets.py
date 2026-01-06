@@ -62,7 +62,7 @@ class BehaveConfig(DatasetConfig):
 class Embody3DConfig(DatasetConfig):
     # fields should match the fields in HOIDataset class
     name: str = 'embody3d'
-    root: str = os.path.join("${env.datasets_folder}", "embody3d_smplh")
+    root: str = os.path.join("${env.datasets_folder}", "embody3d_smplx")
 
     objects: List[str] = field(default_factory=list)
     obj2groupid: Dict[str, int] = field(default_factory=dict)
@@ -77,6 +77,46 @@ class Embody3DConfig(DatasetConfig):
     test_subjects: Optional[List[str]] = None
     test_actions: Optional[List[str]] = None
     test_split_file: Optional[str] = os.path.join("${env.assets_folder}", "embody3d_test.json")
+
+@dataclass
+class InterHumanConfig(DatasetConfig):
+    # fields should match the fields in HOIDataset class
+    name: str = 'interhuman'
+    root: str = os.path.join("${env.datasets_folder}", "interhuman_smpl")
+
+    objects: List[str] = field(default_factory=list)
+    obj2groupid: Dict[str, int] = field(default_factory=dict)
+    obj2classid:  Dict[str, int] = field(default_factory=dict)
+
+    # One has to specify either subjects and actions or split_file
+    train_subjects: Optional[List[str]] = None
+    train_actions: Optional[List[str]] = None
+    train_split_file: Optional[str] = os.path.join("${env.assets_folder}", "interhuman_train.json")
+
+    # One has to specify either subjects and actions or split_file
+    test_subjects: Optional[List[str]] = None
+    test_actions: Optional[List[str]] = None
+    test_split_file: Optional[str] = os.path.join("${env.assets_folder}", "interhuman_test.json")
+
+@dataclass
+class CHI3DConfig(DatasetConfig):
+    # fields should match the fields in HOIDataset class
+    name: str = 'chi3d'
+    root: str = os.path.join("${env.datasets_folder}", "chi3d_smplh")
+
+    objects: List[str] = field(default_factory=list)
+    obj2groupid: Dict[str, int] = field(default_factory=dict)
+    obj2classid:  Dict[str, int] = field(default_factory=dict)
+
+    # One has to specify either subjects and actions or split_file
+    train_subjects: Optional[List[str]] = None
+    train_actions: Optional[List[str]] = None
+    train_split_file: Optional[str] = os.path.join("${env.assets_folder}", "chi3d_train.json")
+
+    # One has to specify either subjects and actions or split_file
+    test_subjects: Optional[List[str]] = None
+    test_actions: Optional[List[str]] = None
+    test_split_file: Optional[str] = os.path.join("${env.assets_folder}", "chi3d_test.json")
 
 @dataclass
 class GrabConfig(DatasetConfig):

@@ -3,7 +3,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from pathlib import Path
 import os
 
-from .datasets import BehaveConfig, Embody3DConfig, GrabConfig, InterCapConfig, OmomoConfig, CustomDatasetConfig
+from .datasets import BehaveConfig, Embody3DConfig, InterHumanConfig, CHI3DConfig, GrabConfig, InterCapConfig, OmomoConfig, CustomDatasetConfig
 from .model import ConditioningModelConfig, DenoisingModelConfig, TriDiModelConfig
 from .environment import EnvironmentConfig
 
@@ -85,8 +85,8 @@ class SchedulerConfig:
 @dataclass
 class LoggingConfig:
     wandb: bool = True
-    wandb_project: str = 'HH-Gen'
-    wandb_entity: str = 'c-yang'
+    wandb_project: str = 'hhgen'
+    wandb_entity: str = 'selin_'
 # ============================================================
 
 # ========================= SAMPLE ===========================
@@ -121,6 +121,8 @@ class EvalConfig:
 class ProjectConfig:
     behave: BehaveConfig = BehaveConfig()
     embody3d: Embody3DConfig = Embody3DConfig()
+    interhuman: InterHumanConfig = InterHumanConfig()
+    chi3d: CHI3DConfig = CHI3DConfig()
     grab: GrabConfig = GrabConfig()
     intercap: InterCapConfig = InterCapConfig()
     omomo: OmomoConfig = OmomoConfig()
