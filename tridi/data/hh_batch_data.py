@@ -8,8 +8,8 @@ from torch import Tensor
 @dataclass
 class HHBatchData:
     # info
-    sbj: Union[str, List[str], None]
-    second_sbj: Union[str, List[str], None]
+    sbj: Union[str, List[str], None] # None
+    second_sbj: Union[str, List[str], None] # none
     path: Union[str, List[str], None] = None
     t_stamp: Union[int, List[int], None] = None
     # sbj

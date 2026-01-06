@@ -35,6 +35,22 @@ def get_train_dataloader(cfg: ProjectConfig):
             val_kwargs = {
                 "split_file": cfg.embody3d.test_split_file,
             }
+        elif dataset_name == "interhuman":
+            dataset_config = cfg.interhuman
+            train_kwargs = {
+                "split_file" : cfg.interhuman.train_split_file,
+            }
+            val_kwargs = {
+                "split_file" : cfg.interhuman.test_split_file,
+            }
+        elif dataset_name == "chi3d":
+            dataset_config = cfg.chi3d
+            train_kwargs = {
+                "split_file" : cfg.chi3d.train_split_file,
+            }
+            val_kwargs = {
+                "split_file" : cfg.chi3d.test_split_file,
+            }
         else:
             raise NotImplementedError(f'Unknown dataset: {dataset_name}')
 
@@ -128,6 +144,16 @@ def get_eval_dataloader(cfg: ProjectConfig):
             dataset_config = cfg.embody3d
             dataset_kwargs = {
                 "split_file": cfg.embody3d.test_split_file,
+            }
+        elif dataset_name == "interhuman":
+            dataset_config = cfg.interhuman
+            dataset_kwargs = {
+                "split_file": cfg.interhuman.test_split_file,
+            }
+        elif dataset_name == "chi3d":
+            dataset_config = cfg.chi3d
+            dataset_kwargs = {
+                "split_file": cfg.chi3d.test_split_file,
             }
         else:
             raise NotImplementedError(f'Unknown dataset: {dataset_name}')
