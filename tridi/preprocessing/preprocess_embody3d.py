@@ -3,7 +3,6 @@ Code to preprocess 30fps annotations for the Embody3D dataset.
 """
 import argparse
 import json
-import pickle as pkl
 from copy import deepcopy
 from multiprocessing import set_start_method
 from pathlib import Path
@@ -35,10 +34,10 @@ def axis_angle_to_matrix(aa: np.array) -> np.array:
     return rot_mats
 
 def split(cfg):
-    set_start_method('spawn')
 
     # convert to Path
     embody3d_path = Path(cfg.embody3d.root)
+    assets_path = Path(cfg.embody3d.assets)
     #print(f"split():{embody3d_path}")
     # list dataset sequences
     train = []
@@ -51,19 +50,12 @@ def split(cfg):
             test.append(sequence.name)
         elif "Going_out" in sequence.name:
             test.append(sequence.name)
+        elif "Home_Renovations" in sequence.name:
+            test.append(sequence.name)
+        elif "Theater_reenactment_competition" in sequence.name:
+            test.append(sequence.name)
         else:
             train.append(sequence.name)
-
-    # for category in sorted(os.listdir(embody3d_path)):
-    #     print(category)
-    #     category_dir = embody3d_path / category
-    #     if not category_dir.is_dir():
-    #         continue
-    #     for i, scene in enumerate(sorted(os.listdir(category_dir))):
-            # if i % 5 == 0:
-            #     test.append(scene)
-            # else:
-            #     train.append(scene)
                 
     split_dict = {
         'train': train,
@@ -73,9 +65,13 @@ def split(cfg):
     # print(f"test samples length:{len(test)}")
     with open(embody3d_path/"split.json", "w") as f:
         json.dump(split_dict, f, indent=4)
-        
+    with open (assets_path/"embody3d_train.json", "w") as f:
+        json.dump(train, f, indent=4)
+    with open (assets_path/"embody3d_test.json", "w") as f:
+        json.dump(test, f, indent=4)
 
 def preprocess(cfg):
+    set_start_method('spawn')
     # convert to Path
     target_folder = Path(cfg.embody3d.target)
     embody3d_path = Path(cfg.embody3d.root)
@@ -156,28 +152,31 @@ def preprocess(cfg):
         
         # downsample parameters if needed
         downsample_factor = 1
-        if cfg.behave.downsample != "None":
-            if cfg.behave.downsample == "10fps":
+        if cfg.embody3d.downsample != "None":
+            if cfg.embody3d.downsample == "10fps":
                 downsample_factor = 3
-            elif cfg.behave.downsample == "1fps":
+            elif cfg.embody3d.downsample == "1fps":
                 downsample_factor = 30
-        T = T_original // downsample_factor
+        #print(f"downsample_factor:{downsample_factor}")
+        #print(f"T_original:{T_original} vs. T_downsampled:{T}")
 
         if downsample_factor != 1:
             for key in smplx_params1:
                 smplx_params1[key] = smplx_params1[key][::downsample_factor]
                 smplx_params2[key] = smplx_params2[key][::downsample_factor]
+            T = smplx_params1["transl"].shape[0]
+        else:
+            T = T_original
 
         # ============ 2 extract vertices for subject 1
         preprocess_transforms = []
 
-        # create smplh model
-        # if not(cfg.input_type in ["smplh", "smpl"]):
-        #     raise NotImplementedError("Only SMPL and SMPL+H are supported for the BEHAVE dataset")
+        # create smplx model
         sbj_model = smplx.build_layer(
-            model_path=str(cfg.env.smpl_folder), model_type="smplh", gender="male",
+            model_path=str(cfg.env.smpl_folder), model_type="smplx", gender="male",
             use_pca=False, num_betas=10, batch_size=T
         )
+        
         # convert parameters sbj1 
         # torch.Tensor
         body_model_params1 = {
@@ -219,11 +218,9 @@ def preprocess(cfg):
         #print("subject1 extracted")
         # ============ 3 extract vertices for subject 2
   
-        # create smplh model
-        # if not(cfg.input_type in ["smplh", "smpl"]):
-        #     raise NotImplementedError("Only SMPL and SMPL+H are supported for the BEHAVE dataset")
+        # create smplx model
         second_sbj_model = smplx.build_layer(
-            model_path=str(cfg.env.smpl_folder), model_type="smplh", gender="male",
+            model_path=str(cfg.env.smpl_folder), model_type="smplx", gender="male",
             use_pca=False, num_betas=10, batch_size=T
         )
 
@@ -266,14 +263,7 @@ def preprocess(cfg):
             #second_sbj_mesh.export(target_folder / f"{seq_name}_second_sbj_{i}_before.ply")
         # ===========================================
         # print("subject2 extracted")
-        # ============ 7 preprocess each time stamp in parallel
-        # name mapping to split sequences for the same subject from different days
-        # if cfg.behave.split == "test":
-        #     seq_name = f"{seq_name}_test"
-        # elif cfg.behave.split == "train":
-        #     seq_name = f"{seq_name}_train"
-        
-
+        # ============ 7 preprocess each time stamp in parallel  
         preprocess_results = []
         # print("preprocess_transforms: ", preprocess_transforms)
         if len(preprocess_transforms) != T:
@@ -321,20 +311,17 @@ def preprocess(cfg):
         # print("preprocess done")
 
         # ============ 8 Save subject-specific data
-        # contact_masks[f"{seq_subject}_{seq_object}_{seq_action}"] = contact_mask
-        # seq_group_name = f"{seq_object}_{seq_action}"
-
         if not seq_name in h5py_file:
             h5py_file.create_group(seq_name)
         seq_group = h5py_file[seq_name]
         add_sequence_datasets_to_hdf5(seq_group, preprocess_results[0], T)
-        add_meatada_to_hdf5(seq_group, seq_name, T)
+        add_meatada_to_hdf5(seq_group, seq_name, T, "male")
         for sample in preprocess_results:
             sample.dump_hdf5(seq_group)
         #print("saved to h5")
 
     # ============ 9 Save global info
-    suffix = f"{cfg.behave.split}_{cfg.behave.downsample}"
+    suffix = f"{cfg.embody3d.split}_{cfg.embody3d.downsample}"
     OmegaConf.save(config=cfg, f=str(target_folder / f"preprocess_config_{suffix}.yaml"))
     # ===========================================
 

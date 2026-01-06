@@ -141,7 +141,7 @@ def get_sequences_list(dataset, input_path, subjects=None, objects=None):
         for sbj in subjects:
             not_filtered.extend(list(input_path.glob(f'{sbj}/*')))
 
-        # 
+        # pattern for subject folders
         pattern = re.compile(r"^[A-Z]{3}\d{3}$")
         # count subjects
         for sequence in not_filtered:
@@ -153,6 +153,11 @@ def get_sequences_list(dataset, input_path, subjects=None, objects=None):
                 # append if 2 subjects
                 if count == 2:
                     all_seqs.append(sequence)
+    elif dataset == "interhuman":
+        # motions / .pkl
+        all_seqs.extend(list(input_path.glob(f'motions/*.pkl')))
+    elif dataset == "chi3d":
+        all_seqs.extend(list(input_path.glob(f'train/*/smplx/*.json')))
     return all_seqs
 
 
