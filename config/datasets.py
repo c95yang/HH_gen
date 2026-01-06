@@ -102,7 +102,7 @@ class InterHumanConfig(DatasetConfig):
 class CHI3DConfig(DatasetConfig):
     # fields should match the fields in HOIDataset class
     name: str = 'chi3d'
-    root: str = os.path.join("${env.datasets_folder}", "chi3d_smplh")
+    root: str = os.path.join("${env.datasets_folder}", "chi3d_smplx")
 
     objects: List[str] = field(default_factory=list)
     obj2groupid: Dict[str, int] = field(default_factory=dict)

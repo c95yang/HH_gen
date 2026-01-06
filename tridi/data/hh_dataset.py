@@ -152,8 +152,6 @@ class HHDataset:
         #     logger.info(f"Filtering subjects to: {sequences_to_load}")
         
         for seq_name in sequences_to_load:
-            print("sequence: ", seq_name)
-            print("self.h5dataset: ", self.h5dataset.keys())
             seq = self.h5dataset[seq_name]
             # print content of seq
             # for key in seq.keys():
@@ -195,5 +193,3 @@ class HHDataset:
                 f.t_stamp or 0,
             ),
         )
-
-#python main.py -c config/env.yaml scenarios/embody3d.yaml -- run.name=embody3d run.job=train

@@ -99,6 +99,11 @@ python main.py -c config/env.yaml scenarios/embody3d.yaml -- \
   run.name=embody3d run.job=train
 ```
 
+```bash
+python main.py -c config/env.yaml scenarios/chi3d.yaml -- \
+  run.name=chi3d run.job=train
+```
+
 ## Citation
 ```bibtex
 @inproceedings{petrov2025tridi,
