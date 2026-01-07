@@ -211,9 +211,9 @@ def preprocess(cfg):
         #print("subject1 extracted")
         # ============ 3 extract vertices for subject 2
   
-        # create smplh model
+        # create smplx model
         second_sbj_model = smplx.build_layer(
-            model_path=str(cfg.env.smpl_folder), model_type="smplh", gender="male",
+            model_path=str(cfg.env.smpl_folder), model_type="smplx", gender="male",
             use_pca=False, num_betas=10, batch_size=T
         )
 
