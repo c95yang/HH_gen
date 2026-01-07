@@ -125,7 +125,7 @@ class HHDataset:
             sbj_c=torch.tensor(sequence['sbj_smpl_transl'][sample.t_stamp], dtype=torch.float),
             sbj_gender=torch.tensor(sbj_gender == 'male', dtype=torch.bool),
             #second subject
-            second_sbj_shape=torch.tensor(sequence['sbj_smpl_betas'][sample.t_stamp], dtype=torch.float),
+            second_sbj_shape=torch.tensor(sequence['second_sbj_smpl_betas'][sample.t_stamp], dtype=torch.float),
             second_sbj_global=second_sbj_global,
             second_sbj_pose=second_sbj_pose,
             second_sbj_c=torch.tensor(sequence['second_sbj_smpl_transl'][sample.t_stamp], dtype=torch.float),
