@@ -1,7 +1,7 @@
 chi3d:
   downsample_factor: 1
-  fps_train: 10
-  fps_eval: 1
+  fps_train: 50
+  fps_eval: 50
   augment_rotation: false
   augment_symmetry: false
 model_denoising:
@@ -23,14 +23,14 @@ run:
   datasets:
   - chi3d
 dataloader:
-  batch_size: 1024
+  batch_size: 3072
   workers: 12
   sampler: weighted
 train:
   mixed_precision: 'no'
   limit_train_batches: null
   log_step_freq: 100
-  checkpoint_freq: 5000
+  checkpoint_freq: 2500
   max_steps: 300000
   print_step_freq: 100
   limit_val_batches: null

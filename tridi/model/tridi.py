@@ -73,7 +73,12 @@ class TriDiModel(BaseTriDiModel):
         x_t = torch.cat([sbj_t, second_sbj_t], dim=1)
 
         # Conditioning
-        x_t_input = self.get_input_with_conditioning(x_t)
+        x_t_input = self.get_input_with_conditioning(
+            x_t,
+            t=timestep_sbj,
+            t_aux=timestep_second_sbj,
+        )
+
         # x_t_input = x_t
 
         # Forward
@@ -117,7 +122,7 @@ class TriDiModel(BaseTriDiModel):
         self, mode, pred, x_sbj_cond, x_second_sbj_cond, x_text_condition_cond, batch, t
     ):
         device = self.device
-        D_sbj, D_second_sbj, D_text_condition = self.data_sbj_channels, self.data_sbj_channels, self.data_text_condition_channels
+        D_sbj, D_second_sbj, D_text_condition = self.data_sbj_channels, self.data_second_sbj_channels, self.data_text_condition_channels
         # B = pred.shape[0]
 
         # Form output based on sampling mode
@@ -190,8 +195,8 @@ class TriDiModel(BaseTriDiModel):
             x_t_sbj = x_sbj_cond.detach().clone()
 
         if mode[1] == "1":
-            x_t_second_sbj = torch.randn(B, D_sbj, device=device)
-            D += D_sbj
+            x_t_second_sbj = torch.randn(B, D_second_sbj, device=device)
+            D += D_second_sbj
         else:
             _, x_second_sbj_cond = self.merge_input_sbj(batch)
             x_second_sbj_cond = x_second_sbj_cond.to(device)
@@ -235,14 +240,12 @@ class TriDiModel(BaseTriDiModel):
 
             with torch.no_grad():
                 # Conditioning
-                x_t_input = self.get_input_with_conditioning(
-                    _x_t, t=t_sbj, t_aux=t_second_sbj
-                )
+                t_sbj_b = t_sbj.reshape(1).expand(B)
+                t_second_sbj_b = t_second_sbj.reshape(1).expand(B)
 
-                # Forward (pred is either noise or x_0)
-                _pred = self.denoising_model(
-                    x_t_input, t_sbj.reshape(1).expand(B), t_second_sbj.reshape(1).expand(B)
-                )
+                x_t_input = self.get_input_with_conditioning(_x_t, t=t_sbj_b, t_aux=t_second_sbj_b)
+                _pred = self.denoising_model(x_t_input, t_sbj_b, t_second_sbj_b)
+
 
             # Step
             t = t.item()
@@ -252,7 +255,7 @@ class TriDiModel(BaseTriDiModel):
             if mode[0] == "1":
                 pred.append(_pred[:, :D_sbj])
             if mode[1] == "1":
-                pred.append(_pred[:, D_sbj:D_sbj + D_sbj])
+                pred.append(_pred[:, D_sbj:D_sbj + D_second_sbj])
             pred = torch.cat(pred, dim=1)
 
             x_t = []

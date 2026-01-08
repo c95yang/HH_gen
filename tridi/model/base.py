@@ -4,6 +4,7 @@ from typing import Optional, Tuple
 
 import numpy as np
 import torch
+import inspect
 from diffusers import ModelMixin
 from diffusers.schedulers.scheduling_ddim import DDIMScheduler
 from diffusers.schedulers.scheduling_ddpm import DDPMScheduler
@@ -151,15 +152,37 @@ class BaseTriDiModel(ModelMixin):
         }
         self.scheduler = self.schedulers_map['ddpm']  # this can be changed for inference
 
+    # base.py
     def get_input_with_conditioning(
         self,
         x_t: Tensor,
-        t: Optional[Tensor] = None, # main timestep
-        t_aux: Optional[Tensor] = None,  # second timestep for unidiffuser
+        t: Optional[Tensor] = None,
+        t_aux: Optional[Tensor] = None,
     ):
-        return self.conditioning_model.get_input_with_conditioning(
-            x_t
-        )
+        fn = self.conditioning_model.get_input_with_conditioning
+        sig = inspect.signature(fn)
+        params = sig.parameters
+
+        kwargs = {}
+
+        #  timestep
+        if t is not None:
+            if "t" in params:
+                kwargs["t"] = t
+            elif "timesteps" in params:
+                kwargs["timesteps"] = t
+            elif "timesteps_sbj" in params:
+                kwargs["timesteps_sbj"] = t
+
+        # sec timestep（第二个人）
+        if t_aux is not None:
+            if "t_aux" in params:
+                kwargs["t_aux"] = t_aux
+            elif "timesteps_aux" in params:
+                kwargs["timesteps_aux"] = t_aux
+            elif "timesteps_second_sbj" in params:
+                kwargs["timesteps_second_sbj"] = t_aux
+        return fn(x_t, **kwargs)
 
     def forward_train(self, *args, **kwargs):
         raise NotImplementedError()

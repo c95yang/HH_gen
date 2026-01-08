@@ -22,12 +22,12 @@ class MeshModel:
         device='cpu'
     ) -> None:
         self.smpl_f = smplx.build_layer(
-            model_path=model_path, model_type="smplh", gender="female",
+            model_path=model_path, model_type="smplx", gender="female",
             use_pca=False, num_betas=10, batch_size=batch_size
         ).to(device)
 
         self.smpl_m = smplx.build_layer(
-            model_path=model_path, model_type="smplh", gender="male",
+            model_path=model_path, model_type="smplx", gender="male",
             use_pca=False, num_betas=10, batch_size=batch_size
         ).to(device)
 
@@ -245,14 +245,15 @@ class MeshModel:
         # default to male
         # get smpl(-h) vertices
         sbj_output = self.smpl_m(pose2rot=False, get_skin=True, return_full_pose=True, **body_model_params)
-        sbj_vertices = sbj_output['vertices']
-        sbj_joints = sbj_output['joints']
+        sbj_vertices = sbj_output.vertices
+        sbj_joints   = sbj_output.joints
+
 
         second_sbj_output = self.smpl_m(
             pose2rot=False, get_skin=True, return_full_pose=True, **second_body_model_params
         )
-        second_sbj_vertices = second_sbj_output['vertices']
-        second_sbj_joints = second_sbj_output['joints']
+        second_sbj_vertices = second_sbj_output.vertices
+        second_sbj_joints = second_sbj_output.joints
 
         return sbj_vertices, sbj_joints, second_sbj_vertices, second_sbj_joints
     
@@ -265,8 +266,8 @@ class MeshModel:
         # default to male
         # get smpl(-h) vertices
         sbj_output = self.smpl_m(pose2rot=False, get_skin=True, return_full_pose=True, **body_model_params)
-        sbj_vertices = sbj_output['vertices']
-        sbj_joints = sbj_output['joints']
+        sbj_vertices = sbj_output.vertices
+        sbj_joints = sbj_output.joints
 
         return sbj_vertices, sbj_joints
 
