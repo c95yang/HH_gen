@@ -164,10 +164,10 @@ def preprocess(cfg):
         # ============ 2 extract vertices for subject 1
         preprocess_transforms = []
 
-        # create smplh model
+        # create smplx model
 
         sbj_model = smplx.build_layer(
-            model_path=str(cfg.env.smpl_folder), model_type="smplx", gender="male",
+            model_path=str(cfg.env.smpl_folder), model_type="smplx", gender="neutral",
             use_pca=False, num_betas=10, batch_size=T
         )
         # convert parameters sbj1 
@@ -188,14 +188,12 @@ def preprocess(cfg):
         sbj_output = sbj_model(pose2rot=False, get_skin=True, return_full_pose=True, **body_model_params1)
         sbj_verts = tensor_to_cpu(sbj_output.vertices)
         sbj_joints = tensor_to_cpu(sbj_output.joints)
-        sbj_transl = body_model_params1["transl"].numpy()
-        sbj_orient = body_model_params1["global_orient"].numpy().reshape(T, 3, 3)
 
         # save smpl parameters np.array
         sbj_smpl = {
             "betas": body_model_params1["betas"].numpy(),
-            "transl": sbj_transl,
-            "global_orient": sbj_orient.reshape(T, 1, 9),
+            "transl": body_model_params1["transl"].numpy(),
+            "global_orient": body_model_params1["global_orient"].numpy(),
             "body_pose": body_model_params1["body_pose"].numpy(),
             "left_hand_pose": body_model_params1["left_hand_pose"].numpy(),
             "right_hand_pose": body_model_params1["right_hand_pose"].numpy()
@@ -206,14 +204,14 @@ def preprocess(cfg):
             sbj_faces = sbj_model.faces
             sbj_mesh = trimesh.Trimesh(vertices=sbj_verts[i], faces=sbj_faces)
             # save sbj mesh
-            #sbj_mesh.export(target_folder / f"{seq_name}_sbj_{i}_before.ply")
+            #sbj_mesh.export(target_folder / "meshes"/ f"{seq_name}_sbj_{i}.ply")
 
         #print("subject1 extracted")
         # ============ 3 extract vertices for subject 2
   
         # create smplx model
         second_sbj_model = smplx.build_layer(
-            model_path=str(cfg.env.smpl_folder), model_type="smplx", gender="male",
+            model_path=str(cfg.env.smpl_folder), model_type="smplx", gender="neutral",
             use_pca=False, num_betas=10, batch_size=T
         )
 
@@ -228,21 +226,19 @@ def preprocess(cfg):
             "right_hand_pose": torch.tensor(smplx_params2['right_hand_pose'],dtype=torch.float).reshape(T, -1, 9),
         }
         if cfg.input_type == "smpl":
-            body_model_params1["left_hand_pose"] = None
-            body_model_params1["right_hand_pose"] = None
+            body_model_params2["left_hand_pose"] = None
+            body_model_params2["right_hand_pose"] = None
 
         # get smpl(-h) vertices
         second_sbj_output = second_sbj_model(pose2rot=False, get_skin=True, return_full_pose=True, **body_model_params2)
         second_sbj_verts = tensor_to_cpu(second_sbj_output.vertices)
         second_sbj_joints = tensor_to_cpu(second_sbj_output.joints)
-        second_sbj_transl = body_model_params2["transl"].numpy()
-        second_sbj_smpl = body_model_params2["global_orient"].numpy().reshape(T, 3, 3)
 
         # save smpl parameters np.array
         second_sbj_smpl = {
             "betas": body_model_params2["betas"].numpy(),
-            "transl": second_sbj_transl,
-            "global_orient": second_sbj_smpl.reshape(T, 1, 9),
+            "transl": body_model_params2["transl"].numpy(),
+            "global_orient": body_model_params2["global_orient"].numpy(),
             "body_pose": body_model_params2["body_pose"].numpy(),
             "left_hand_pose": body_model_params2["left_hand_pose"].numpy(),
             "right_hand_pose": body_model_params2["right_hand_pose"].numpy()
@@ -253,7 +249,7 @@ def preprocess(cfg):
             second_sbj_faces = second_sbj_model.faces
             second_sbj_mesh = trimesh.Trimesh(vertices=second_sbj_verts[i], faces=second_sbj_faces)
             # save sbj mesh
-            #second_sbj_mesh.export(target_folder / f"{seq_name}_second_sbj_{i}_before.ply")
+            #second_sbj_mesh.export(target_folder / "meshes"/ f"{seq_name}_second_sbj_{i}.ply")
         # ===========================================
         # print("subject2 extracted")
         # ============ 7 preprocess each time stamp in parallel
@@ -309,7 +305,7 @@ def preprocess(cfg):
             h5py_file.create_group(seq_name)
         seq_group = h5py_file[seq_name]
         add_sequence_datasets_to_hdf5(seq_group, preprocess_results[0], T)
-        add_meatada_to_hdf5(seq_group, seq_name, T, "male")
+        add_meatada_to_hdf5(seq_group, seq_name, T, "neutral")
         for sample in preprocess_results:
             sample.dump_hdf5(seq_group)
         #print("saved to h5")
@@ -337,5 +333,5 @@ if __name__ == "__main__":
     # preprocess data
     preprocess(config)
 
-#python -m tridi.preprocessing.preprocess_chi3d -c ./config/env.yaml -- chi3d.split="train" chi3d.downsample="10fps"
+#python -m tridi.preprocessing.preprocess_chi3d -c ./config/env.yaml -- chi3d.split="train" chi3d.downsample="50fps"
 #python -m tridi.preprocessing.preprocess_chi3d -c ./config/env.yaml -- chi3d.split="test" chi3d.downsample="1fps"
