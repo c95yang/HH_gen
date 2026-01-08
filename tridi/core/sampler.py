@@ -48,7 +48,8 @@ class Sampler:
                                / f"step_{self.cfg.resume.step}_samples")
         self.base_samples_folder.mkdir(parents=True, exist_ok=True)
 
-        self.text_condition_model = TextConditionModel("clip", device=self.device)
+        #self.text_condition_model = TextConditionModel("clip", device=self.device)
+        self.text_condition_model = None
 # 
     @torch.no_grad()
     def sample_step(self, batch) -> Tuple[TriDiModelOutput, List[str]]:

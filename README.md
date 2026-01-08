@@ -104,6 +104,14 @@ python main.py -c config/env.yaml scenarios/chi3d.yaml -- \
   run.name=chi3d run.job=train
 ```
 
+```bash
+python main.py -c config/env.yaml scenarios/chi3d.yaml -- \
+  run.job=sample run.name=chi3d sample.target=meshes \
+  resume.checkpoint="experiments/chi3d/checkpoints/checkpoint-step-0050000.pth" resume.step=50000 \
+  dataloader.batch_size=2048 sample.mode="sample_10" \
+  run.datasets=["chi3d"] sample.dataset=normal sample.repetitions=3
+```
+
 ## Citation
 ```bibtex
 @inproceedings{petrov2025tridi,
