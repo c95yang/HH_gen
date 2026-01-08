@@ -85,9 +85,7 @@ class HHDataset:
         return data_dict
 
     @staticmethod
-    def _apply_z_rotation_augmentation(
-        sbj_global, second_sbj_global
-    ):
+    def _apply_z_rotation_augmentation(sbj_global, second_sbj_global):
         # sample rotation angle
         angle = np.random.choice(np.arange(-np.pi, np.pi, np.pi / 36))
 
@@ -122,11 +120,8 @@ class HHDataset:
         def _flip(body_model_params):
             body_model_params["body_pose"] = body_model_params["body_pose"][body_sym_map]
             body_model_params = {k: v * sign_flip if k != "global_orient" else v for k, v in body_model_params.items()}
-
             lh, rh = body_model_params["left_hand_pose"], body_model_params["right_hand_pose"]
-            body_model_params["left_hand_pose"] = rh
-            body_model_params["right_hand_pose"] = lh
-
+            body_model_params["left_hand_pose"], body_model_params["right_hand_pose"] = rh, lh
             return body_model_params
 
         sbj_body_model_params = _flip(sbj_body_model_params)
@@ -184,7 +179,6 @@ class HHDataset:
             ], axis=0).reshape((51, 3, 3))
             sbj_global = sequence['sbj_smpl_global'][sample.t_stamp]
 
-            second_sbj_gender = sbj_gender
             second_sbj_pose = np.concatenate([
                 sequence['second_sbj_smpl_body'][sample.t_stamp],
                 sequence['second_sbj_smpl_lh'][sample.t_stamp],
