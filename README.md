@@ -75,6 +75,19 @@ python main.py -c config/env.yaml scenarios/mirror.yaml -- \
   run.datasets=["behave"] sample.dataset=normal sample.repetitions=3
 ```
 
+```bash
+python main.py -c config/env.yaml scenarios/chi3d.yaml -- \
+  run.job=sample \
+  run.name=chi3d \
+  sample.target=hdf5 \
+  resume.checkpoint="experiments/chi3d/checkpoints/checkpoint-step-0050000.pth" \
+  resume.step=50000 \
+  dataloader.batch_size=2048 \
+  sample.mode=sample_01 \
+  run.datasets='[chi3d]' \
+  sample.dataset=normal \
+  sample.repetitions=3
+```
 
 Use the command below to run evaluation on the generated samples. The `eval.sampling_target` parameter controls 
 which modalities are evaluated (possible values: `sbj_contact`, `obj_contact`,):
@@ -82,6 +95,8 @@ which modalities are evaluated (possible values: `sbj_contact`, `obj_contact`,):
 python main.py -c config/env.yaml scenarios/mirror.yaml -- \
   run.job=eval run.name=001_01_mirror resume.step=-1 eval.sampling_target=["sbj","second_sbj"] 
 ```
+
+
 evaluate gen_metrics together,but reconstruction metrics separately
 ```bash
 python main.py -c config/env.yaml scenarios/chi3d.yaml -- \
