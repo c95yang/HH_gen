@@ -85,16 +85,14 @@ class SchedulerConfig:
 @dataclass
 class LoggingConfig:
     wandb: bool = True
-    wandb_project: str = 'hhgen'
-    wandb_entity: str = 'yaoweiwang-technical-university-of-munich'
+    # wandb_project: str = 'hhgen'
+    # wandb_entity: str = 'yaoweiwang-technical-university-of-munich'
 
-    # wandb: bool = True
     # wandb_project: str = 'hhgen'
     # wandb_entity: str = 'selin'
 
-    # wandb: bool = True
-    # wandb_project: str = 'HH-Gen'
-    # wandb_entity: str = 'c-yang'
+    wandb_project: str = 'HH-Gen'
+    wandb_entity: str = 'c-yang'
 # ============================================================
 
 # ========================= SAMPLE ===========================

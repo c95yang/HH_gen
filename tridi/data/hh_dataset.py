@@ -38,6 +38,8 @@ class HHDataset:
     fps: Optional[int] = 30
     max_timestamps: Optional[int] = None  # 限制每个序列的最大timestamp数量
     filter_subjects: Optional[List[str]] = None  # only load the specified subjects
+    augment_symmetry: bool = False
+    augment_rotation: bool = False
 
     def __post_init__(self) -> None:
         # Open h5 dataset
@@ -81,32 +83,159 @@ class HHDataset:
                 data_dict[seq]["_attrs"] = dict(h5_dataset[seq].attrs)
         return data_dict
 
+    @staticmethod
+    def _apply_z_rotation_augmentation(
+        sbj_global, second_sbj_global
+    ):
+        # sample rotation angle
+        angle = np.random.choice(np.arange(-np.pi, np.pi, np.pi / 36))
+
+        # Z-axis rotation matrix
+        R_aug_z = np.array([
+            [np.cos(angle), -np.sin(angle), 0],
+            [np.sin(angle),  np.cos(angle), 0],
+            [0,              0,             1],
+        ], dtype=np.float32)
+
+        # rotate global orientations
+        sbj_global = np.dot(R_aug_z, sbj_global.reshape(3, 3))
+        second_sbj_global = np.dot(R_aug_z, second_sbj_global.reshape(3, 3))
+
+        return sbj_global, second_sbj_global
+
+
+    @staticmethod
+    def _apply_symmetry_augmentation(sbj_body_model_params, second_sbj_body_model_params):
+        # symmetrical mapping for body joints
+        body_sym_map = np.array(
+            [1, 0, 2, 4, 3, 5, 7, 6, 8, 10, 9, 11, 13, 12, 14, 16, 15, 18, 17, 20, 19]
+        )
+
+        # z y x -> -z -y x  (your "flip fixer")
+        sign_flip = np.array([[
+            [1.0, -1.0, -1.0],
+            [-1.0, 1.0, 1.0],
+            [-1.0, 1.0, 1.0]
+        ]], dtype=np.float32)
+
+        def _flip_one(body_model_params):
+            # 1) swap body joints (left/right)
+            if "body_pose" in body_model_params and body_model_params["body_pose"] is not None:
+                body_model_params["body_pose"] = body_model_params["body_pose"][body_sym_map]
+
+            # 2) flip rotations (except global_orient, consistent with your original)
+            flipped = {}
+            for k, v in body_model_params.items():
+                if v is None:
+                    flipped[k] = v
+                    continue
+
+                if k == "global_orient":
+                    flipped[k] = v
+                else:
+                    # only apply to arrays that are rotation-like and broadcastable
+                    # (this matches your original behavior: v * sign_flip)
+                    try:
+                        flipped[k] = v * sign_flip
+                    except Exception:
+                        flipped[k] = v  # leave untouched if shape doesn't match
+
+            body_model_params = flipped
+
+            # 3) mirror translation if present: x -> -x
+            # common keys: transl, trans, root_trans, pelvis_trans, etc.
+            for tkey in ["transl", "trans", "root_trans", "translation"]:
+                if tkey in body_model_params and body_model_params[tkey] is not None:
+                    body_model_params[tkey][0] *= -1
+                    break
+
+            # 4) swap hand poses
+            if "left_hand_pose" in body_model_params and "right_hand_pose" in body_model_params:
+                lh, rh = body_model_params["left_hand_pose"], body_model_params["right_hand_pose"]
+                body_model_params["left_hand_pose"] = rh
+                body_model_params["right_hand_pose"] = lh
+
+            return body_model_params
+
+        sbj_body_model_params = _flip_one(sbj_body_model_params)
+        second_sbj_body_model_params = _flip_one(second_sbj_body_model_params)
+
+        return sbj_body_model_params, second_sbj_body_model_params
+
+
     def __getitem__(self, idx: int) -> HHBatchData:
         sample = self.data[idx]
         sequence = self.h5dataset[sample.sequence]
 
         sbj_gender = sequence.attrs['gender']
-        sbj_pose = np.concatenate([
-            sequence['sbj_smpl_body'][sample.t_stamp],
-            sequence['sbj_smpl_lh'][sample.t_stamp],
-            sequence['sbj_smpl_rh'][sample.t_stamp],
-        ], axis=0).reshape((51, 3, 3))
-        sbj_global = sequence['sbj_smpl_global'][sample.t_stamp]
+        second_sbj_gender = sequence.attrs['gender']
+        
+        # ==> augmentations
+        if self.augment_symmetry and np.random.rand() > 0.5:
+            sbj_body_model_params = {
+                "global_orient": sequence['sbj_smpl_global'][sample.t_stamp].reshape(1, 3, 3),
+                "body_pose": sequence['sbj_smpl_body'][sample.t_stamp].reshape(-1, 3, 3),
+                "left_hand_pose":  sequence['sbj_smpl_lh'][sample.t_stamp].reshape(-1, 3, 3),
+                "right_hand_pose": sequence['sbj_smpl_rh'][sample.t_stamp].reshape(-1, 3, 3)
+            }
+            second_sbj_body_model_params = {
+                "global_orient": sequence['second_sbj_smpl_global'][sample.t_stamp].reshape(1, 3, 3),
+                "body_pose": sequence['second_sbj_smpl_body'][sample.t_stamp].reshape(-1, 3, 3),
+                "left_hand_pose":  sequence['second_sbj_smpl_lh'][sample.t_stamp].reshape(-1, 3, 3),
+                "right_hand_pose": sequence['second_sbj_smpl_rh'][sample.t_stamp].reshape(-1, 3, 3)
+            }
+            # perfrom horizontal flip
+            sbj_body_model_params, second_sbj_body_model_params = self._apply_symmetry_augmentation(
+                sbj_body_model_params, second_sbj_body_model_params
+            )
+            # save subject params
+            sbj_pose = np.concatenate([
+                sbj_body_model_params['body_pose'],
+                sbj_body_model_params['left_hand_pose'],
+                sbj_body_model_params['right_hand_pose']
+            ], axis=0).reshape((51, 3, 3))
+            sbj_global = sbj_body_model_params['global_orient'][0].reshape((3, 3))
+
+            second_sbj_pose = np.concatenate([
+                second_sbj_body_model_params['body_pose'],
+                second_sbj_body_model_params['left_hand_pose'],
+                second_sbj_body_model_params['right_hand_pose']
+            ], axis=0).reshape((51, 3, 3))
+            second_sbj_global = second_sbj_body_model_params['global_orient'][0].reshape((3, 3))
+
+
+        else:
+            sbj_pose = np.concatenate([
+                sequence['sbj_smpl_body'][sample.t_stamp],
+                sequence['sbj_smpl_lh'][sample.t_stamp],
+                sequence['sbj_smpl_rh'][sample.t_stamp],
+            ], axis=0).reshape((51, 3, 3))
+            sbj_global = sequence['sbj_smpl_global'][sample.t_stamp]
+
+            second_sbj_gender = sbj_gender
+            second_sbj_pose = np.concatenate([
+                sequence['second_sbj_smpl_body'][sample.t_stamp],
+                sequence['second_sbj_smpl_lh'][sample.t_stamp],
+                sequence['second_sbj_smpl_rh'][sample.t_stamp],
+            ], axis=0).reshape((51, 3, 3))
+            second_sbj_global = sequence['second_sbj_smpl_global'][sample.t_stamp]
         # print("sbj_global: ", sequence['sbj_smpl_global'].shape)
+
+        sbj_global = sbj_global.reshape(3, 3)
+        second_sbj_global = second_sbj_global.reshape(3, 3)
+
+        if self.augment_rotation and np.random.rand() > 0.25:
+            sbj_global, second_sbj_global = self._apply_z_rotation_augmentation(
+                sbj_global, second_sbj_global
+            )
+
         # convert to 6d representation
         sbj_global = matrix_to_rotation_6d(sbj_global.reshape(3, 3)).reshape(-1)
         sbj_pose = matrix_to_rotation_6d(sbj_pose).reshape(-1)
-        
-        second_sbj_gender = sbj_gender
-        second_sbj_pose = np.concatenate([
-            sequence['second_sbj_smpl_body'][sample.t_stamp],
-            sequence['second_sbj_smpl_lh'][sample.t_stamp],
-            sequence['second_sbj_smpl_rh'][sample.t_stamp],
-        ], axis=0).reshape((51, 3, 3))
-        second_sbj_global = sequence['second_sbj_smpl_global'][sample.t_stamp]
         # convert to 6d representation
         second_sbj_global = matrix_to_rotation_6d(second_sbj_global.reshape(3, 3)).reshape(-1)
         second_sbj_pose = matrix_to_rotation_6d(second_sbj_pose).reshape(-1)    
+
 
         # Fill BatchData isntance
         batch_data = HHBatchData(

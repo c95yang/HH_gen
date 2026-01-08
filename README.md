@@ -66,13 +66,18 @@ python main.py -c config/env.yaml scenarios/gb_main.yaml -- \
   run.datasets=["grab","behave"] sample.dataset=normal sample.repetitions=3 \
   model.cg_apply=True model.cg_scale=2.0
 
-
-```bash
 python main.py -c config/env.yaml scenarios/mirror.yaml -- \
   run.job=sample run.name=000_01_mirror sample.target=meshes \
   resume.checkpoint="experiments/000_01_mirror/checkpoints/checkpoint-step-0005000.pth" \
   dataloader.batch_size=2 sample.mode="sample_01" \
   run.datasets=["behave"] sample.dataset=normal sample.repetitions=3
+
+```bash
+python main.py -c config/env.yaml scenarios/chi3d.yaml -- \
+  run.job=sample run.name=chi3d sample.target=meshes \
+  resume.checkpoint="experiments/chi3d/checkpoints/checkpoint-step-0005000.pth" \
+  dataloader.batch_size=512 sample.mode="sample_01" \
+  run.datasets=["chi3d"] sample.dataset=normal sample.repetitions=3
 ```
 
 
