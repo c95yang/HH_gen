@@ -34,6 +34,7 @@ def parse_arguments():
 def init_logging(cfg: ProjectConfig):
     # Ensure the directory exists before creating the log file
     log_dir = Path(cfg.run.path)
+    print(f"log_dir: {log_dir}")
     log_dir.mkdir(parents=True, exist_ok=True)
     
     logging.basicConfig(
@@ -135,6 +136,7 @@ def init_exp(arguments):
 
     # Save experiment path and full name
     config.run.name = experiment_path.name
+    config.run.path = str(experiment_path.resolve())
 
     # Turn off wandb for evaluation
     if config.run.job != "train":

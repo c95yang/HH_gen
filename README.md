@@ -74,9 +74,9 @@ python main.py -c config/env.yaml scenarios/mirror.yaml -- \
 
 ```bash
 python main.py -c config/env.yaml scenarios/chi3d.yaml -- \
-  run.job=sample run.name=chi3d sample.target=meshes \
-  resume.checkpoint="experiments/chi3d/checkpoints/checkpoint-step-0005000.pth" \
-  dataloader.batch_size=512 sample.mode="sample_01" \
+  run.job=sample run.name=000_chi3d sample.target=meshes \
+  resume.checkpoint="experiments/000_chi3d/checkpoints/checkpoint-step-0004000.pth" resume.step=4000 \
+  dataloader.batch_size=2048 sample.mode="sample_01" \
   run.datasets=["chi3d"] sample.dataset=normal sample.repetitions=3
 ```
 

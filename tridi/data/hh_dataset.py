@@ -27,6 +27,8 @@ class HHDataset:
     name: str # 'behave', 'embody3d', 'interhuman', 'chi3d'
     root: Path
     split: str # 'train', 'test'
+    augment_symmetry: bool
+    augment_rotation: bool
     downsample_factor: int = 1
     h5dataset_path: Path = None
     preload_data: bool = True
@@ -38,8 +40,7 @@ class HHDataset:
     fps: Optional[int] = 30
     max_timestamps: Optional[int] = None  # 限制每个序列的最大timestamp数量
     filter_subjects: Optional[List[str]] = None  # only load the specified subjects
-    augment_symmetry: bool = False
-    augment_rotation: bool = False
+
 
     def __post_init__(self) -> None:
         # Open h5 dataset
@@ -111,54 +112,25 @@ class HHDataset:
             [1, 0, 2, 4, 3, 5, 7, 6, 8, 10, 9, 11, 13, 12, 14, 16, 15, 18, 17, 20, 19]
         )
 
-        # z y x -> -z -y x  (your "flip fixer")
+        # z y x -> -z -y x  
         sign_flip = np.array([[
             [1.0, -1.0, -1.0],
             [-1.0, 1.0, 1.0],
             [-1.0, 1.0, 1.0]
         ]], dtype=np.float32)
 
-        def _flip_one(body_model_params):
-            # 1) swap body joints (left/right)
-            if "body_pose" in body_model_params and body_model_params["body_pose"] is not None:
-                body_model_params["body_pose"] = body_model_params["body_pose"][body_sym_map]
+        def _flip(body_model_params):
+            body_model_params["body_pose"] = body_model_params["body_pose"][body_sym_map]
+            body_model_params = {k: v * sign_flip if k != "global_orient" else v for k, v in body_model_params.items()}
 
-            # 2) flip rotations (except global_orient, consistent with your original)
-            flipped = {}
-            for k, v in body_model_params.items():
-                if v is None:
-                    flipped[k] = v
-                    continue
-
-                if k == "global_orient":
-                    flipped[k] = v
-                else:
-                    # only apply to arrays that are rotation-like and broadcastable
-                    # (this matches your original behavior: v * sign_flip)
-                    try:
-                        flipped[k] = v * sign_flip
-                    except Exception:
-                        flipped[k] = v  # leave untouched if shape doesn't match
-
-            body_model_params = flipped
-
-            # 3) mirror translation if present: x -> -x
-            # common keys: transl, trans, root_trans, pelvis_trans, etc.
-            for tkey in ["transl", "trans", "root_trans", "translation"]:
-                if tkey in body_model_params and body_model_params[tkey] is not None:
-                    body_model_params[tkey][0] *= -1
-                    break
-
-            # 4) swap hand poses
-            if "left_hand_pose" in body_model_params and "right_hand_pose" in body_model_params:
-                lh, rh = body_model_params["left_hand_pose"], body_model_params["right_hand_pose"]
-                body_model_params["left_hand_pose"] = rh
-                body_model_params["right_hand_pose"] = lh
+            lh, rh = body_model_params["left_hand_pose"], body_model_params["right_hand_pose"]
+            body_model_params["left_hand_pose"] = rh
+            body_model_params["right_hand_pose"] = lh
 
             return body_model_params
 
-        sbj_body_model_params = _flip_one(sbj_body_model_params)
-        second_sbj_body_model_params = _flip_one(second_sbj_body_model_params)
+        sbj_body_model_params = _flip(sbj_body_model_params)
+        second_sbj_body_model_params = _flip(second_sbj_body_model_params)
 
         return sbj_body_model_params, second_sbj_body_model_params
 
