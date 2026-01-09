@@ -89,6 +89,20 @@ python main.py -c config/env.yaml scenarios/chi3d.yaml -- \
   sample.repetitions=3
 ```
 
+```bash
+python main.py -c config/env.yaml scenarios/chi3d.yaml -- \
+  run.job=sample \
+  run.name=chi3d2 \
+  sample.target=meshes \
+  resume.checkpoint="experiments/000_chi3d2/checkpoints/checkpoint-step-0050000.pth" \
+  resume.step=50000 \
+  dataloader.batch_size=2048 \
+  sample.mode=sample_10 \
+  run.datasets='[chi3d]' \
+  sample.dataset=normal \
+  sample.repetitions=3
+```
+
 Use the command below to run evaluation on the generated samples. The `eval.sampling_target` parameter controls 
 which modalities are evaluated (possible values: `sbj_contact`, `obj_contact`,):
 ```bash
