@@ -141,49 +141,70 @@ class HHDataset:
     def _load_data(self) -> List[H5DataSample]:
         logger.info(f"HHDataset {self.name}: loading from {self.h5dataset_path}.")
 
-        data = []
-        T = 0
-        skipped = 0
-        
+        data: List[H5DataSample] = []
+        total_frames = 0
+        skipped_missing = 0
+
         # choose which sequences to load
-        sequences_to_load = self.sequences
-        # if self.filter_subjects is not None:
-        #     sequences_to_load = [s for s in sequences_to_load if s in self.filter_subjects]
-        #     logger.info(f"Filtering subjects to: {sequences_to_load}")
+        sequences_to_load = list(self.sequences)
+
+       
+        if self.filter_subjects is not None and len(self.filter_subjects) > 0:
+            before = len(sequences_to_load)
+            sequences_to_load = [s for s in sequences_to_load if s in set(self.filter_subjects)]
+            logger.info(f"Filtering subjects: {before} -> {len(sequences_to_load)}")
+
+        # 
+        available = set(self.h5dataset.keys())
+        missing = [s for s in sequences_to_load if s not in available]
+        if len(missing) > 0:
+            logger.warning(
+                f"[HHDataset {self.name}] {len(missing)} sequences in split but NOT in hdf5. "
+                f"Examples: {missing[:10]}"
+            )
+        sequences_to_load = [s for s in sequences_to_load if s in available]
+        skipped_missing = len(missing)
+
+        if len(sequences_to_load) == 0:
+            raise RuntimeError(
+                f"[HHDataset {self.name}] After filtering, no valid sequences left. "
+                f"hdf5 keys={len(available)}, split size={len(self.sequences)}"
+            )
+
         
         for seq_name in sequences_to_load:
-            seq = self.h5dataset[seq_name]
-            # print content of seq
-            # for key in seq.keys():
-            #     print(f"  {key}: {seq[key].shape}")
-# 
-            # Try to get sequence, skip if missing
-            if seq is None:
-                # print(f"Skipping missing sequence: {seq_name}")
-                skipped += 1
+            seq = self.h5dataset[seq_name]   
+
+            # timestamps
+            T_seq = int(seq.attrs.get("T", 0))
+            if T_seq <= 0:
+                logger.warning(f"[HHDataset {self.name}] Sequence {seq_name} has T={T_seq}, skip.")
                 continue
 
-            # create timestamp
-            t_stamps = list(range(seq.attrs["T"]))
-            
+            t_stamps = list(range(T_seq))
+
             # Limit the number of timestamps per sequence
             if self.max_timestamps is not None:
-                t_stamps = t_stamps[:self.max_timestamps]
+                t_stamps = t_stamps[: self.max_timestamps]
 
-            T += len(t_stamps)
-            seq_data = [
-                H5DataSample(
-                    sequence=seq_name,
-                    name=f"{seq_name}",
-                    t_stamp=t_stamp
-                ) for t_stamp in t_stamps
-            ]
-
+            # Downsample
             if self.downsample_factor > 1:
-                seq_data = seq_data[::self.downsample_factor]
+                t_stamps = t_stamps[:: self.downsample_factor]
+
+            # build samples
+            seq_data = [
+                H5DataSample(sequence=seq_name, name=f"{seq_name}", t_stamp=int(t))
+                for t in t_stamps
+            ]
             data.extend(seq_data)
-        logger.info(f"HH dataset {self.name} {self.split} has {T} frames.")
+            total_frames += len(seq_data)
+
+        logger.info(
+            f"HH dataset {self.name} {self.split} has {total_frames} frames "
+            f"(skipped_missing_seq={skipped_missing})."
+        )
         return data
+
 
     def _sort_data(self) -> None:
         self.data = sorted(

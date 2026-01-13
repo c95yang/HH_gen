@@ -1,7 +1,7 @@
 chi3d:
   downsample_factor: 1
-  fps_train: 50
-  fps_eval: 50
+  fps_train: 1
+  fps_eval: 1
   augment_rotation: false
   augment_symmetry: false
 model_denoising:
@@ -23,8 +23,8 @@ run:
   datasets:
   - chi3d
 dataloader:
-  batch_size: 3072
-  workers: 12
+  batch_size: 2
+  workers: 0
   sampler: weighted
 train:
   mixed_precision: 'no'
@@ -58,3 +58,4 @@ scheduler:
     num_warmup_steps: 5000
     num_training_steps: 50000
 #python main.py -c config/env.yaml scenarios/chi3d.yaml -- run.name=chi3d2 run.job=train
+

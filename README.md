@@ -114,26 +114,29 @@ python main.py -c config/env.yaml scenarios/mirror.yaml -- \
 evaluate gen_metrics together,but reconstruction metrics separately
 ```bash
 python main.py -c config/env.yaml scenarios/chi3d.yaml -- \
-  run.job=eval run.name=chi3d resume.step=50000 \
+  run.job=eval run.name=008_chi3d2_1fps resume.step=20000 \
   'run.datasets=["chi3d"]' \
   'eval.sampling_target=["sbj","second_sbj"]' \
-  eval.use_gen_metrics=true eval.use_rec_metrics=false
+  eval.use_gen_metrics=true eval.use_rec_metrics=false \
+  eval.samples_folder=experiments/008_chi3d2_1fps/artifacts/step_20000_samples
 ```
 
 ```bash
 python main.py -c config/env.yaml scenarios/chi3d.yaml -- \
-  run.job=eval run.name=chi3d resume.step=50000 \
+  run.job=eval run.name=008_chi3d2_1fps resume.step=20000 \
   'run.datasets=["chi3d"]' \
   'eval.sampling_target=["sbj"]' \
-  eval.use_gen_metrics=false eval.use_rec_metrics=true
+  eval.use_gen_metrics=false eval.use_rec_metrics=true \
+  eval.samples_folder=experiments/008_chi3d2_1fps/artifacts/step_20000_samples
 ```
 
 ```bash
 python main.py -c config/env.yaml scenarios/chi3d.yaml -- \
-  run.job=eval run.name=chi3d resume.step=50000 \
+  run.job=eval run.name=008_chi3d2_1fps resume.step=20000 \
   'run.datasets=["chi3d"]' \
   'eval.sampling_target=["second_sbj"]' \
-  eval.use_gen_metrics=false eval.use_rec_metrics=true
+  eval.use_gen_metrics=false eval.use_rec_metrics=true \
+  eval.samples_folder=experiments/008_chi3d2_1fps/artifacts/step_20000_samples
 ```
 
 ## Training

@@ -120,7 +120,7 @@ class SampleConfig:
 class EvalConfig:
     use_gen_metrics: bool = True
     use_rec_metrics: bool = True
-
+    samples_folder: Optional[str] = None
     sampling_target: List[str] = field(default_factory=lambda: [])
 
 # ============================================================
