@@ -80,12 +80,38 @@ class KnnWrapper:
             assert class_id is not None
         knn = self.index if self.model_type == 'general' else self.index[class_id]
 
+        # ---- NEW: make features always a 2D numpy array ----
+        if isinstance(features, list):
+            # list of arrays -> concatenate
+            feats = []
+            for f in features:
+                if f is None:
+                    continue
+                f = np.asarray(f)
+                if f.size == 0:
+                    continue
+                if f.ndim == 1:
+                    f = f.reshape(1, -1)
+                feats.append(f)
+            if len(feats) == 0:
+                return np.empty((0, k), dtype=np.float32), np.empty((0, k), dtype=np.int64)
+            features = np.concatenate(feats, axis=0)
+        else:
+            features = np.asarray(features)
+            if features.ndim == 1:
+                features = features.reshape(1, -1)
+
+        if features.shape[0] == 0:
+            return np.empty((0, k), dtype=np.float32), np.empty((0, k), dtype=np.int64)
+        # -----------------------------------------------
+
         if self.backend == "scipy":
             distances, indices = knn.query(features.astype(np.float32), k=k)
         else:
             distances, indices = knn.search(features.astype(np.float32), k=k)
 
         return distances, indices
+
 
 
 def create_nn_model(

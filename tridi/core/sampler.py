@@ -10,6 +10,8 @@ import trimesh
 import wandb
 from trimesh import visual as tr_visual
 
+from tridi.data.hh_batch_data import HHBatchData
+
 from config.config import ProjectConfig
 from tridi.data import get_eval_dataloader
 from tridi.model.base import TriDiModelOutput
@@ -48,7 +50,8 @@ class Sampler:
                                / f"step_{self.cfg.resume.step}_samples")
         self.base_samples_folder.mkdir(parents=True, exist_ok=True)
 
-        self.text_condition_model = TextConditionModel("clip", device=self.device)
+        #self.text_condition_model = TextConditionModel("clip", device=self.device)
+        self.text_condition_model = None
 # 
     @torch.no_grad()
     def sample_step(self, batch) -> Tuple[TriDiModelOutput, List[str]]:
@@ -163,20 +166,42 @@ class Sampler:
             # Collect all unique subjects and their max timestamps
             sbj2max_t = {}
             for sample in dataloader.dataset.data:
-                sbj = sample.subject
+                sbj = getattr(sample, "subject", None)
+                if sbj is None:
+                    sbj = getattr(sample, "sequence", None)  
+                if sbj is None:
+                    sbj = getattr(sample, "name", None)      
                 t_stamp = sample.t_stamp
+
                 if sbj not in sbj2max_t:
                     sbj2max_t[sbj] = t_stamp
                 else:
                     sbj2max_t[sbj] = max(sbj2max_t[sbj], t_stamp)
+
 
             base_name = Path(target_name).stem
             S = self.cfg.sample.repetitions
             h5py_files = [h5py.File(str(samples_folder / f"{base_name}_rep_{s:02d}.hdf5"), "w") for s in range(S)]
 
             # Get faces for both subjects
-            sbj_f = self.mesh_model.get_faces_np()
+            # Get faces
+            sbj_f = self.mesh_model.get_faces_np().astype(np.int32)
+
+            # ---- probe:  V and J
+            probe_batch = next(iter(dataloader))
+            if isinstance(probe_batch, dict):
+                probe_batch = HHBatchData(**probe_batch)
+
+            gt_v1, gt_j1, gt_v2, gt_j2 = self.mesh_model.get_smpl_th(probe_batch)  # GT meshes/joints
+            V = int(gt_v1.shape[1])
+            J = int(gt_j1.shape[1])
+
             
+            V_from_faces = int(sbj_f.max()) + 1
+            if V_from_faces != V:
+                logger.warning(f"[HDF5] V mismatch: faces give {V_from_faces}, SMPL gives {V}. Using V={V}.")
+
+
             # Initialize hdf5 structure
             for h5py_file in h5py_files:
                 for sbj, max_t in sbj2max_t.items():
@@ -184,26 +209,27 @@ class Sampler:
                     T = max_t + 1  # t_stamp is 0-indexed
                     
                     # First subject datasets
-                    sbj_group.create_dataset("sbj_v", shape=(T, 6890, 3))
-                    sbj_group.create_dataset("sbj_f", shape=(sbj_f.shape[0], 3), data=sbj_f)
-                    sbj_group.create_dataset("sbj_smpl_global", shape=(T, 1, 9))
-                    sbj_group.create_dataset("sbj_smpl_body", shape=(T, 21, 9))
-                    sbj_group.create_dataset("sbj_smpl_lh", shape=(T, 15, 9))
-                    sbj_group.create_dataset("sbj_smpl_rh", shape=(T, 15, 9))
-                    sbj_group.create_dataset("sbj_smpl_transl", shape=(T, 3))
-                    sbj_group.create_dataset("sbj_smpl_betas", shape=(T, 10))
-                    sbj_group.create_dataset("sbj_j", shape=(T, 73, 3))
+                    sbj_group.create_dataset("sbj_v", shape=(T, V, 3), dtype="f4")
+                    sbj_group.create_dataset("sbj_f", data=sbj_f, dtype="i4")
+                    sbj_group.create_dataset("sbj_smpl_global", shape=(T, 1, 9), dtype="f4")
+                    sbj_group.create_dataset("sbj_smpl_body", shape=(T, 21, 9), dtype="f4")
+                    sbj_group.create_dataset("sbj_smpl_lh", shape=(T, 15, 9), dtype="f4")
+                    sbj_group.create_dataset("sbj_smpl_rh", shape=(T, 15, 9), dtype="f4")
+                    sbj_group.create_dataset("sbj_smpl_transl", shape=(T, 3), dtype="f4")
+                    sbj_group.create_dataset("sbj_smpl_betas", shape=(T, 10), dtype="f4")
+                    sbj_group.create_dataset("sbj_j", shape=(T, J, 3), dtype="f4")
                     
                     # Second subject datasets
-                    sbj_group.create_dataset("second_sbj_v", shape=(T, 6890, 3))
-                    sbj_group.create_dataset("second_sbj_f", shape=(sbj_f.shape[0], 3), data=sbj_f)
-                    sbj_group.create_dataset("second_sbj_smpl_global", shape=(T, 1, 9))
-                    sbj_group.create_dataset("second_sbj_smpl_body", shape=(T, 21, 9))
-                    sbj_group.create_dataset("second_sbj_smpl_lh", shape=(T, 15, 9))
-                    sbj_group.create_dataset("second_sbj_smpl_rh", shape=(T, 15, 9))
-                    sbj_group.create_dataset("second_sbj_smpl_transl", shape=(T, 3))
-                    sbj_group.create_dataset("second_sbj_smpl_betas", shape=(T, 10))
-                    sbj_group.create_dataset("second_sbj_j", shape=(T, 73, 3))
+                    sbj_group.create_dataset("second_sbj_v", shape=(T, V, 3), dtype="f4")
+                    sbj_group.create_dataset("second_sbj_f", data=sbj_f, dtype="i4")
+                    sbj_group.create_dataset("second_sbj_smpl_global", shape=(T, 1, 9), dtype="f4")
+                    sbj_group.create_dataset("second_sbj_smpl_body", shape=(T, 21, 9), dtype="f4")
+                    sbj_group.create_dataset("second_sbj_smpl_lh", shape=(T, 15, 9), dtype="f4")
+                    sbj_group.create_dataset("second_sbj_smpl_rh", shape=(T, 15, 9), dtype="f4")
+                    sbj_group.create_dataset("second_sbj_smpl_transl", shape=(T, 3), dtype="f4")
+                    sbj_group.create_dataset("second_sbj_smpl_betas", shape=(T, 10), dtype="f4")
+                    sbj_group.create_dataset("second_sbj_j", shape=(T, J, 3), dtype="f4")
+
                     
                     # Attributes
                     sbj_group.attrs['T'] = T
@@ -257,25 +283,27 @@ class Sampler:
                         sbj_group = h5py_files[repetition_id][sbj]
 
                         # First subject
-                        sbj_group['sbj_v'][t_stamp] = sbj_meshes[sample_idx].vertices
+                        sbj_group['sbj_v'][t_stamp] = sbj_meshes[sample_idx].vertices.astype(np.float32)
                         sbj_group['sbj_smpl_global'][t_stamp] = sbj_global[sample_idx]
                         sbj_group['sbj_smpl_body'][t_stamp] = sbj_body[sample_idx]
                         sbj_group['sbj_smpl_lh'][t_stamp] = sbj_lh[sample_idx]
                         sbj_group['sbj_smpl_rh'][t_stamp] = sbj_rh[sample_idx]
                         sbj_group['sbj_smpl_transl'][t_stamp] = output.sbj_c[sample_idx].cpu().numpy()
                         sbj_group['sbj_smpl_betas'][t_stamp] = output.sbj_shape[sample_idx].cpu().numpy()
-                        sbj_group['sbj_j'][t_stamp] = sbj_joints[sample_idx]
+                        sbj_group['sbj_j'][t_stamp] = sbj_joints[sample_idx].astype(np.float32)
 
                         # Second subject
-                        sbj_group['second_sbj_v'][t_stamp] = second_sbj_meshes[sample_idx].vertices
+                        sbj_group['second_sbj_v'][t_stamp] = second_sbj_meshes[sample_idx].vertices.astype(np.float32)
                         sbj_group['second_sbj_smpl_global'][t_stamp] = second_sbj_global[sample_idx]
                         sbj_group['second_sbj_smpl_body'][t_stamp] = second_sbj_body[sample_idx]
                         sbj_group['second_sbj_smpl_lh'][t_stamp] = second_sbj_lh[sample_idx]
                         sbj_group['second_sbj_smpl_rh'][t_stamp] = second_sbj_rh[sample_idx]
                         sbj_group['second_sbj_smpl_transl'][t_stamp] = output.second_sbj_c[sample_idx].cpu().numpy()
                         sbj_group['second_sbj_smpl_betas'][t_stamp] = output.second_sbj_shape[sample_idx].cpu().numpy()
-                        sbj_group['second_sbj_j'][t_stamp] = second_sbj_joints[sample_idx]
+                        sbj_group['second_sbj_j'][t_stamp] = second_sbj_joints[sample_idx].astype(np.float32)
+
 
             # Close hdf5 files
             for h5py_file in h5py_files:
                 h5py_file.close()
+

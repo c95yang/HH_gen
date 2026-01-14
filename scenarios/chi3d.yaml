@@ -42,7 +42,7 @@ train:
 optimizer:
   type: torch
   name: AdamW
-  lr: 0.0001
+  lr: 0.00015
   weight_decay: 1.0e-06
   scale_learning_rate_with_batch_size: false
   gradient_accumulation_steps: 1
@@ -55,6 +55,7 @@ scheduler:
   type: transformers
   name: cosine
   kwargs:
-    num_warmup_steps: 50000
-    num_training_steps: 300000
-#python main.py -c config/env.yaml scenarios/chi3d.yaml -- run.name=chi3d run.job=train
+    num_warmup_steps: 5000
+    num_training_steps: 50000
+#python main.py -c config/env.yaml scenarios/chi3d.yaml -- run.name=chi3d2 run.job=train
+

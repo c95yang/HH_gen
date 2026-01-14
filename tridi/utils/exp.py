@@ -137,7 +137,6 @@ def init_exp(arguments):
     # Save experiment path and full name
     config.run.name = experiment_path.name
     config.run.path = str(experiment_path.resolve())
-
     # Turn off wandb for evaluation
     if config.run.job != "train":
         config.logging.wandb = False
