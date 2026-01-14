@@ -90,7 +90,7 @@ class LoggingConfig:
 
     # wandb: bool = True
     # wandb_project: str = 'hhgen'
-    # wandb_entity: str = 'selin'
+    # wandb_entity: str = 'selin_'
 
     # wandb: bool = True
     # wandb_project: str = 'HH-Gen'
