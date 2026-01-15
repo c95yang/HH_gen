@@ -116,7 +116,7 @@ def get_train_dataloader(cfg: ProjectConfig):
     # create dataloaders
     train_dataloader = torch.utils.data.DataLoader(
         train_dataset, batch_size=cfg.dataloader.batch_size, num_workers=cfg.dataloader.workers,
-        drop_last=True, sampler=sampler, pin_memory=True, collate_fn=HHBatchData.collate,
+        drop_last=False, sampler=sampler, pin_memory=True, collate_fn=HHBatchData.collate,
         persistent_workers=False,
     )
     val_dataloader = torch.utils.data.DataLoader(

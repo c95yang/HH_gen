@@ -25,7 +25,7 @@ run:
   datasets:
   - chi3d
 dataloader:
-  batch_size: 2
+  batch_size: 256
   workers: 12
   sampler: weighted
 train:
