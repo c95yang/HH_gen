@@ -13,6 +13,8 @@ import torch
 from .hh_batch_data import HHBatchData
 from ..utils.geometry import matrix_to_rotation_6d
 
+from ..preprocessing.common import apply_symmetry_augmentation, apply_z_rotation_augmentation
+
 logger = getLogger(__name__)
 
 
@@ -84,51 +86,6 @@ class HHDataset:
                 data_dict[seq]["_attrs"] = dict(h5_dataset[seq].attrs)
         return data_dict
 
-    @staticmethod
-    def _apply_z_rotation_augmentation(sbj_global, second_sbj_global):
-        # sample rotation angle
-        angle = np.random.choice(np.arange(-np.pi, np.pi, np.pi / 36))
-
-        # Z-axis rotation matrix
-        R_aug_z = np.array([
-            [np.cos(angle), -np.sin(angle), 0],
-            [np.sin(angle),  np.cos(angle), 0],
-            [0,              0,             1],
-        ], dtype=np.float32)
-
-        # rotate global orientations
-        sbj_global = np.dot(R_aug_z, sbj_global.reshape(3, 3))
-        second_sbj_global = np.dot(R_aug_z, second_sbj_global.reshape(3, 3))
-
-        return sbj_global, second_sbj_global
-
-
-    @staticmethod
-    def _apply_symmetry_augmentation(sbj_body_model_params, second_sbj_body_model_params):
-        # symmetrical mapping for body joints
-        body_sym_map = np.array(
-            [1, 0, 2, 4, 3, 5, 7, 6, 8, 10, 9, 11, 13, 12, 14, 16, 15, 18, 17, 20, 19]
-        )
-
-        # z y x -> -z -y x  
-        sign_flip = np.array([[
-            [1.0, -1.0, -1.0],
-            [-1.0, 1.0, 1.0],
-            [-1.0, 1.0, 1.0]
-        ]], dtype=np.float32)
-
-        def _flip(body_model_params):
-            body_model_params["body_pose"] = body_model_params["body_pose"][body_sym_map]
-            body_model_params = {k: v * sign_flip if k != "global_orient" else v for k, v in body_model_params.items()}
-            lh, rh = body_model_params["left_hand_pose"], body_model_params["right_hand_pose"]
-            body_model_params["left_hand_pose"], body_model_params["right_hand_pose"] = rh, lh
-            return body_model_params
-
-        sbj_body_model_params = _flip(sbj_body_model_params)
-        second_sbj_body_model_params = _flip(second_sbj_body_model_params)
-
-        return sbj_body_model_params, second_sbj_body_model_params
-
 
     def __getitem__(self, idx: int) -> HHBatchData:
         sample = self.data[idx]
@@ -138,62 +95,40 @@ class HHDataset:
         second_sbj_gender = sequence.attrs['gender']
         
         # ==> augmentations
-        if self.augment_symmetry and np.random.rand() > 0.5:
-            sbj_body_model_params = {
-                "global_orient": sequence['sbj_smpl_global'][sample.t_stamp].reshape(1, 3, 3),
-                "body_pose": sequence['sbj_smpl_body'][sample.t_stamp].reshape(-1, 3, 3),
-                "left_hand_pose":  sequence['sbj_smpl_lh'][sample.t_stamp].reshape(-1, 3, 3),
-                "right_hand_pose": sequence['sbj_smpl_rh'][sample.t_stamp].reshape(-1, 3, 3)
-            }
-            second_sbj_body_model_params = {
-                "global_orient": sequence['second_sbj_smpl_global'][sample.t_stamp].reshape(1, 3, 3),
-                "body_pose": sequence['second_sbj_smpl_body'][sample.t_stamp].reshape(-1, 3, 3),
-                "left_hand_pose":  sequence['second_sbj_smpl_lh'][sample.t_stamp].reshape(-1, 3, 3),
-                "right_hand_pose": sequence['second_sbj_smpl_rh'][sample.t_stamp].reshape(-1, 3, 3)
-            }
-            # perfrom horizontal flip
-            sbj_body_model_params, second_sbj_body_model_params = self._apply_symmetry_augmentation(
-                sbj_body_model_params, second_sbj_body_model_params
-            )
-            # save subject params
-            sbj_pose = np.concatenate([
-                sbj_body_model_params['body_pose'],
-                sbj_body_model_params['left_hand_pose'],
-                sbj_body_model_params['right_hand_pose']
-            ], axis=0).reshape((51, 3, 3))
-            sbj_global = sbj_body_model_params['global_orient'][0].reshape((3, 3))
+        sym = self.augment_symmetry and np.random.rand() > 0.5
+        rot = self.augment_rotation and np.random.rand() > 0.25
+        
+        if sym:
+            sample = apply_symmetry_augmentation(sample)
+        if rot:
+            sample = apply_z_rotation_augmentation(sample)
+        
+        if rot or sym:
+            sample.sbj_mesh.vertices = np.copy(sample.sbj_pc)
+            sample.second_sbj_mesh.vertices = np.copy(sample.second_sbj_pc)
+        if sym:
+            sample.sbj_mesh.invert()
+            sample.second_sbj_mesh.invert()
 
-            second_sbj_pose = np.concatenate([
-                second_sbj_body_model_params['body_pose'],
-                second_sbj_body_model_params['left_hand_pose'],
-                second_sbj_body_model_params['right_hand_pose']
-            ], axis=0).reshape((51, 3, 3))
-            second_sbj_global = second_sbj_body_model_params['global_orient'][0].reshape((3, 3))
+        # <== save parameters
+        sbj_pose = np.concatenate([
+            sequence['sbj_smpl_body'][sample.t_stamp],
+            sequence['sbj_smpl_lh'][sample.t_stamp],
+            sequence['sbj_smpl_rh'][sample.t_stamp],
+        ], axis=0).reshape((51, 3, 3))
+        sbj_global = sequence['sbj_smpl_global'][sample.t_stamp]
 
-
-        else:
-            sbj_pose = np.concatenate([
-                sequence['sbj_smpl_body'][sample.t_stamp],
-                sequence['sbj_smpl_lh'][sample.t_stamp],
-                sequence['sbj_smpl_rh'][sample.t_stamp],
-            ], axis=0).reshape((51, 3, 3))
-            sbj_global = sequence['sbj_smpl_global'][sample.t_stamp]
-
-            second_sbj_pose = np.concatenate([
-                sequence['second_sbj_smpl_body'][sample.t_stamp],
-                sequence['second_sbj_smpl_lh'][sample.t_stamp],
-                sequence['second_sbj_smpl_rh'][sample.t_stamp],
-            ], axis=0).reshape((51, 3, 3))
-            second_sbj_global = sequence['second_sbj_smpl_global'][sample.t_stamp]
+        second_sbj_pose = np.concatenate([
+            sequence['second_sbj_smpl_body'][sample.t_stamp],
+            sequence['second_sbj_smpl_lh'][sample.t_stamp],
+            sequence['second_sbj_smpl_rh'][sample.t_stamp],
+        ], axis=0).reshape((51, 3, 3))
+        second_sbj_global = sequence['second_sbj_smpl_global'][sample.t_stamp]
         # print("sbj_global: ", sequence['sbj_smpl_global'].shape)
 
         sbj_global = sbj_global.reshape(3, 3)
         second_sbj_global = second_sbj_global.reshape(3, 3)
 
-        if self.augment_rotation and np.random.rand() > 0.25:
-            sbj_global, second_sbj_global = self._apply_z_rotation_augmentation(
-                sbj_global, second_sbj_global
-            )
 
         # convert to 6d representation
         sbj_global = matrix_to_rotation_6d(sbj_global.reshape(3, 3)).reshape(-1)

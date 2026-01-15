@@ -38,6 +38,7 @@ def split(cfg):
         if "Push" in sequence.name:
             test.append(str(sequence))
         else:
+        #elif "Hit" in sequence.name:
             train.append(str(sequence))
                 
     split_dict = {
@@ -73,11 +74,13 @@ def split(cfg):
         json.dump(split_test, f, indent=4)
         
 
-def preprocess(cfg):
+def preprocess(cfg, debug=False):
     set_start_method('spawn')
     # convert to Path
     target_folder = Path(cfg.chi3d.target)
     chi3d_path = Path(cfg.chi3d.root)
+    print(f"chi3d_path: {chi3d_path}")
+    print(f"target_folder: {target_folder}")
 
     # list dataset sequences
     _sequences = get_sequences_list(
@@ -206,7 +209,8 @@ def preprocess(cfg):
             sbj_faces = sbj_model.faces
             sbj_mesh = trimesh.Trimesh(vertices=sbj_verts[i], faces=sbj_faces)
             # save sbj mesh
-            #sbj_mesh.export(target_folder / f"{seq_name}_sbj_{i}_before.ply")
+            if debug:
+                sbj_mesh.export(target_folder / f"{seq_name}_sbj_{i}_before.ply")
 
         #print("subject1 extracted")
         # ============ 3 extract vertices for subject 2
@@ -252,8 +256,9 @@ def preprocess(cfg):
             # create mesh
             second_sbj_faces = second_sbj_model.faces
             second_sbj_mesh = trimesh.Trimesh(vertices=second_sbj_verts[i], faces=second_sbj_faces)
-            # save sbj mesh
-            #second_sbj_mesh.export(target_folder / f"{seq_name}_second_sbj_{i}_before.ply")
+            # save second_sbj mesh
+            if debug:
+                second_sbj_mesh.export(target_folder / f"{seq_name}_second_sbj_{i}_before.ply")
         # ===========================================
         # print("subject2 extracted")
         # ============ 7 preprocess each time stamp in parallel
@@ -296,8 +301,13 @@ def preprocess(cfg):
                 },
                 preprocess_transforms=preprocess_transforms[t]
             )
-            result = preprocess_worker(sample)
-            preprocess_results.append(result)
+            sample_result = preprocess_worker(sample)
+
+            if debug:
+                sample_result.sbj_mesh.export(target_folder / f"{seq_name}_sbj_{t}_after.ply")
+                sample_result.second_sbj_mesh.export(target_folder / f"{seq_name}_second_sbj_{t}_after.ply")
+
+            preprocess_results.append(sample_result)
         # ===========================================
 
         # print(preprocess_results[0])

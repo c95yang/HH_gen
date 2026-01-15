@@ -120,3 +120,10 @@ to the preprocessed data folder (default: `./data/preprocessed/`):
 ```bash
 cp -r ./assets/pointnext_features/ ./data/preprocessed/
 ```
+
+
+# chi3d
+```bash
+python -m tridi.preprocessing.preprocess_chi3d -c ./config/env.yaml -- chi3d.split="train" chi3d.root="/home/cc/Documents/datasets/chi3d/raw" chi3d.downsample="1fps"
+python -m tridi.preprocessing.preprocess_chi3d -c ./config/env.yaml -- chi3d.split="test" 
+```

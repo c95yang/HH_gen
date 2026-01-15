@@ -314,25 +314,137 @@ def contacts_worker(obj_mesh, obj_verts, sbj_verts, sbj_faces, contact_threshold
 def preprocess_worker(
     sample: DatasetSample
 ):
-    # ============ 1 set vertices for sbj and obj meshes
-    sample.sbj_mesh.vertices = np.copy(sample.sbj_pc)
-    sample.second_sbj_mesh.vertices = np.copy(sample.second_sbj_pc)
-    all_vertices = [sample.sbj_mesh.vertices, sample.second_sbj_mesh.vertices]
-    all_vertices = np.concatenate(all_vertices, axis=0)
-    center = all_vertices.mean(axis=0)
-    # print(f"Center: {center}")
-    
-    sample.sbj_mesh.vertices -= center
-    sample.sbj_joints -= center
-    sample.sbj_pc -= center
-    sample.sbj_smpl['transl'] -= center
-    
-    sample.second_sbj_mesh.vertices -= center
-    sample.second_sbj_joints -= center
-    sample.second_sbj_pc -= center
-    sample.second_sbj_smpl['transl'] -= center
-    
+    # sample = apply_symmetry_augmentation(sample)
+    # sample = apply_z_rotation_augmentation(sample)
+
+    # sample.sbj_mesh.vertices = np.copy(sample.sbj_pc)
+    # sample.second_sbj_mesh.vertices = np.copy(sample.second_sbj_pc)
+
+    # # invert only if symmetry augmentation is applied
+    # sample.sbj_mesh.invert()
+    # sample.second_sbj_mesh.invert()
+
     sample.scale = 1.0
+
+    return sample
+
+
+def apply_z_rotation_augmentation(sample: DatasetSample) -> DatasetSample:
+    angle = np.random.choice(np.arange(-np.pi, np.pi, np.pi / 36))
+    #angle = np.pi /2
+
+    cos, sin = np.cos(angle), np.sin(angle)
+    R = np.array([
+        [cos, -sin, 0.0],
+        [sin,  cos, 0.0],
+        [0.0,  0.0, 1.0]
+    ], dtype=np.float32)
+
+    def rot(x):
+        return x @ R.T
+
+    # --- first subject ---
+    sample.sbj_pc = rot(sample.sbj_pc)
+    sample.sbj_joints = rot(sample.sbj_joints)
+    sample.sbj_smpl["transl"] = rot(sample.sbj_smpl["transl"])
+    sample.sbj_smpl["global_orient"] = rotate_axis_angle(
+        sample.sbj_smpl["global_orient"], R
+    )
+
+    # --- second subject ---
+    sample.second_sbj_pc = rot(sample.second_sbj_pc)
+    sample.second_sbj_joints = rot(sample.second_sbj_joints)
+    sample.second_sbj_smpl["transl"] = rot(sample.second_sbj_smpl["transl"])
+    sample.second_sbj_smpl["global_orient"] = rotate_axis_angle(
+        sample.second_sbj_smpl["global_orient"], R
+    )
+
+    return sample
+
+def rotate_axis_angle(axis_angle, Rz):
+    R_new = Rz @ axis_angle.reshape(3, 3)
+    R_new = R_new.reshape(9)
+    return R_new
+
+
+def apply_symmetry_augmentation(sample: DatasetSample) -> DatasetSample:
+    body_sym_map = np.array(
+        [1, 0, 2, 4, 3, 5, 7, 6, 8, 10, 9, 11, 13, 12, 14, 16, 15, 18, 17, 20, 19],
+        dtype=np.int64
+    )
+
+    # (x,y,z)->(-x,y,z)
+    S = np.diag([-1.0, 1.0, 1.0]).astype(np.float32)
+    s_vec = np.array([-1.0, 1.0, 1.0], dtype=np.float32)  # 给 axis-angle 用
+
+    def flip_points(x):
+        x = np.asarray(x)
+        return x @ S.T
+
+    def flip_rot(x):
+        x = np.asarray(x, dtype=np.float32)
+
+        # axis-angle: (...,3)
+        if x.ndim >= 1 and x.shape[-1] == 3:
+            return x * s_vec
+
+        # rotmat: (...,3,3)
+        if x.shape[-2:] == (3, 3):
+            return S @ x @ S
+
+        # flatten rotmat: (...,9)
+        if x.shape[-1] == 9:
+            R = x.reshape(*x.shape[:-1], 3, 3)
+            Rf = S @ R @ S
+            return Rf.reshape(*x.shape[:-1], 9)
+
+        raise ValueError(f"Unsupported rotation shape: {x.shape}")
+
+    def flip_global_orient_1x9(go):
+        go = np.asarray(go, dtype=np.float32)
+        assert go.shape == (1, 9)
+        R = go.reshape(1, 3, 3)
+        Rf = S[None, :, :] @ R @ S[None, :, :]
+        return Rf.reshape(1, 9)
+
+    def flip_params(params):
+        # transl / geometry space
+        if "transl" in params:
+            params["transl"] = flip_points(params["transl"])
+
+        # global orient
+        if "global_orient" in params:
+            go = params["global_orient"]
+            if np.asarray(go).shape == (1, 9):
+                params["global_orient"] = flip_global_orient_1x9(go)
+            else:
+                params["global_orient"] = flip_rot(go)
+
+        # body pose (swap L/R joints then flip)
+        if "body_pose" in params:
+            bp = np.asarray(params["body_pose"])
+            if bp.shape[0] == body_sym_map.shape[0]:
+                bp = bp[body_sym_map]
+            params["body_pose"] = flip_rot(bp)
+
+        # hands (swap + flip)
+        if "left_hand_pose" in params and "right_hand_pose" in params:
+            lh = flip_rot(params["left_hand_pose"])
+            rh = flip_rot(params["right_hand_pose"])
+            params["left_hand_pose"], params["right_hand_pose"] = rh, lh
+
+        # betas not changed
+        return params
+
+    # --- flip point clouds / joints ---
+    sample.sbj_pc = flip_points(sample.sbj_pc)
+    sample.sbj_joints = flip_points(sample.sbj_joints)
+    sample.second_sbj_pc = flip_points(sample.second_sbj_pc)
+    sample.second_sbj_joints = flip_points(sample.second_sbj_joints)
+
+    # --- flip SMPL params ---
+    sample.sbj_smpl = flip_params(sample.sbj_smpl)
+    sample.second_sbj_smpl = flip_params(sample.second_sbj_smpl)
 
     return sample
 

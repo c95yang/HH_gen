@@ -4,6 +4,9 @@ chi3d:
   fps_eval: 1
   augment_rotation: true
   augment_symmetry: true
+  root: /home/cc/Documents/datasets/chi3d/chi3d_overfit/chi3d_smplx
+  train_split_file: /home/cc/Documents/datasets/chi3d/chi3d_overfit/assets/chi3d_train.json
+  test_split_file: /home/cc/Documents/datasets/chi3d/chi3d_overfit/assets/chi3d_test.json
 model_denoising:
   name: transformer_unidiffuser_3
   dim_timestep_embed: 128
