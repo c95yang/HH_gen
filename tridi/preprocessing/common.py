@@ -314,8 +314,8 @@ def contacts_worker(obj_mesh, obj_verts, sbj_verts, sbj_faces, contact_threshold
 def preprocess_worker(
     sample: DatasetSample
 ):
-    # sample = apply_symmetry_augmentation(sample)
-    # sample = apply_z_rotation_augmentation(sample)
+    # sample = apply_symmetry(sample)
+    # sample = apply_z_rotation(sample)
 
     # sample.sbj_mesh.vertices = np.copy(sample.sbj_pc)
     # sample.second_sbj_mesh.vertices = np.copy(sample.second_sbj_pc)
@@ -329,7 +329,7 @@ def preprocess_worker(
     return sample
 
 
-def apply_z_rotation_augmentation(sample: DatasetSample) -> DatasetSample:
+def apply_z_rotation(sample: DatasetSample) -> DatasetSample:
     angle = np.random.choice(np.arange(-np.pi, np.pi, np.pi / 36))
     #angle = np.pi /2
 
@@ -343,21 +343,22 @@ def apply_z_rotation_augmentation(sample: DatasetSample) -> DatasetSample:
     def rot(x):
         return x @ R.T
 
-    # --- first subject ---
-    sample.sbj_pc = rot(sample.sbj_pc)
-    sample.sbj_joints = rot(sample.sbj_joints)
+    # smpl params
     sample.sbj_smpl["transl"] = rot(sample.sbj_smpl["transl"])
     sample.sbj_smpl["global_orient"] = rotate_axis_angle(
         sample.sbj_smpl["global_orient"], R
     )
 
-    # --- second subject ---
-    sample.second_sbj_pc = rot(sample.second_sbj_pc)
-    sample.second_sbj_joints = rot(sample.second_sbj_joints)
     sample.second_sbj_smpl["transl"] = rot(sample.second_sbj_smpl["transl"])
     sample.second_sbj_smpl["global_orient"] = rotate_axis_angle(
         sample.second_sbj_smpl["global_orient"], R
     )
+
+    # point clouds and joints
+    sample.sbj_pc = rot(sample.sbj_pc)
+    sample.sbj_joints = rot(sample.sbj_joints)
+    sample.second_sbj_pc = rot(sample.second_sbj_pc)
+    sample.second_sbj_joints = rot(sample.second_sbj_joints)
 
     return sample
 
@@ -367,7 +368,7 @@ def rotate_axis_angle(axis_angle, Rz):
     return R_new
 
 
-def apply_symmetry_augmentation(sample: DatasetSample) -> DatasetSample:
+def apply_symmetry(sample: DatasetSample) -> DatasetSample:
     body_sym_map = np.array(
         [1, 0, 2, 4, 3, 5, 7, 6, 8, 10, 9, 11, 13, 12, 14, 16, 15, 18, 17, 20, 19],
         dtype=np.int64
@@ -436,15 +437,15 @@ def apply_symmetry_augmentation(sample: DatasetSample) -> DatasetSample:
         # betas not changed
         return params
 
+    # --- flip SMPL params ---
+    sample.sbj_smpl = flip_params(sample.sbj_smpl)
+    sample.second_sbj_smpl = flip_params(sample.second_sbj_smpl)
+
     # --- flip point clouds / joints ---
     sample.sbj_pc = flip_points(sample.sbj_pc)
     sample.sbj_joints = flip_points(sample.sbj_joints)
     sample.second_sbj_pc = flip_points(sample.second_sbj_pc)
     sample.second_sbj_joints = flip_points(sample.second_sbj_joints)
-
-    # --- flip SMPL params ---
-    sample.sbj_smpl = flip_params(sample.sbj_smpl)
-    sample.second_sbj_smpl = flip_params(sample.second_sbj_smpl)
 
     return sample
 

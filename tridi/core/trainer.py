@@ -196,7 +196,8 @@ class Trainer:
                     wandb.finish()
                     time.sleep(5)
                     return
-            # print("VAL")
+            
+            #print("VAL")
             self.model.eval()
             val_log, val_metrics, val_counters = defaultdict(float), defaultdict(float), defaultdict(int)
             for i, batch in enumerate(self.dataloader_val):

@@ -1,6 +1,6 @@
 chi3d:
   downsample_factor: 1
-  fps_train: 10
+  fps_train: 1
   fps_eval: 1
   augment_rotation: true
   augment_symmetry: true
@@ -26,7 +26,7 @@ run:
   datasets:
   - chi3d
 dataloader:
-  batch_size: 1024
+  batch_size: 2048
   workers: 12
   sampler: weighted
 train:
