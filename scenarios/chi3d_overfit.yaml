@@ -3,9 +3,9 @@ chi3d:
   fps_eval: 10
   augment_rotation: false
   augment_symmetry: false
-  root: /home/cc/Documents/datasets/chi3d/chi3d_full/chi3d_smplx
-  train_split_file: /home/cc/Documents/datasets/chi3d/chi3d_full/assets/chi3d_train.json
-  test_split_file: /home/cc/Documents/datasets/chi3d/chi3d_full/assets/chi3d_test.json
+  root: /home/cc/Documents/datasets/chi3d/chi3d_overfit/chi3d_smplx
+  train_split_file: /home/cc/Documents/datasets/chi3d/chi3d_overfit/assets/chi3d_train.json
+  test_split_file: /home/cc/Documents/datasets/chi3d/chi3d_overfit/assets/chi3d_test.json
 model_denoising:
   name: transformer_unidiffuser_3
   dim_timestep_embed: 128
@@ -25,7 +25,7 @@ run:
   datasets:
   - chi3d
 dataloader:
-  batch_size: 256
+  batch_size: 2
   workers: 12
   sampler: weighted
 train:

@@ -15,7 +15,6 @@ import torch
 import tqdm
 import trimesh
 from omegaconf import OmegaConf
-from scipy.spatial.transform import Rotation
 
 from .common import (tensor_to_cpu, DatasetSample, preprocess_worker, \
     get_sequences_list, init_preprocessing, \
@@ -35,11 +34,18 @@ def split(cfg):
     sequences = get_sequences_list("chi3d", chi3d_path)
 
     for sequence in sequences:
-        if "Push" in sequence.name:
-            test.append(str(sequence))
+        # print(f"sequence name:{sequence.name}")
+
+        if cfg.overfit:
+            if "Push" in sequence.name:
+                test.append(str(sequence))
+            if "Handshake 8" in sequence.name and "s03" in Path(sequence).parents[1].name:
+                train.append(str(sequence))
         else:
-        #elif "Hit" in sequence.name:
-            train.append(str(sequence))
+            if "Push" in sequence.name:
+                test.append(str(sequence))
+            else:
+                train.append(str(sequence))
                 
     split_dict = {
         'train': train,
@@ -74,7 +80,7 @@ def split(cfg):
         json.dump(split_test, f, indent=4)
         
 
-def preprocess(cfg, debug=False):
+def preprocess(cfg):
     set_start_method('spawn')
     # convert to Path
     target_folder = Path(cfg.chi3d.target)
@@ -160,6 +166,11 @@ def preprocess(cfg, debug=False):
             for key in smplx_params1:
                 smplx_params1[key] = smplx_params1[key][::downsample_factor]
                 smplx_params2[key] = smplx_params2[key][::downsample_factor]
+
+                if cfg.overfit:
+                    smplx_params1[key] = smplx_params1[key][10:12]
+                    smplx_params2[key] = smplx_params2[key][10:12]
+
                 T = smplx_params1["transl"].shape[0]
         else:
             T = T_original
@@ -209,7 +220,7 @@ def preprocess(cfg, debug=False):
             sbj_faces = sbj_model.faces
             sbj_mesh = trimesh.Trimesh(vertices=sbj_verts[i], faces=sbj_faces)
             # save sbj mesh
-            if debug:
+            if cfg.debug:
                 sbj_mesh.export(target_folder / f"{seq_name}_sbj_{i}_before.ply")
 
         #print("subject1 extracted")
@@ -257,7 +268,7 @@ def preprocess(cfg, debug=False):
             second_sbj_faces = second_sbj_model.faces
             second_sbj_mesh = trimesh.Trimesh(vertices=second_sbj_verts[i], faces=second_sbj_faces)
             # save second_sbj mesh
-            if debug:
+            if cfg.debug:
                 second_sbj_mesh.export(target_folder / f"{seq_name}_second_sbj_{i}_before.ply")
         # ===========================================
         # print("subject2 extracted")
@@ -303,9 +314,10 @@ def preprocess(cfg, debug=False):
             )
             sample_result = preprocess_worker(sample)
 
-            if debug:
+            if cfg.debug:
                 sample_result.sbj_mesh.export(target_folder / f"{seq_name}_sbj_{t}_after.ply")
                 sample_result.second_sbj_mesh.export(target_folder / f"{seq_name}_second_sbj_{t}_after.ply")
+                tqdm.tqdm.write(f"Exported debug meshes for {seq_name} at t={t}")
 
             preprocess_results.append(sample_result)
         # ===========================================

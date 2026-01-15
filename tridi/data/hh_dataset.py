@@ -10,8 +10,6 @@ import h5py
 import numpy as np
 import torch
 
-from tridi.preprocessing.common import DatasetSample
-
 from .hh_batch_data import HHBatchData
 from ..utils.geometry import matrix_to_rotation_6d
 

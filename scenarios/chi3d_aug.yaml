@@ -1,8 +1,8 @@
 chi3d:
   fps_train: 10
   fps_eval: 10
-  augment_rotation: false
-  augment_symmetry: false
+  augment_rotation: true
+  augment_symmetry: true
   root: /home/cc/Documents/datasets/chi3d/chi3d_full/chi3d_smplx
   train_split_file: /home/cc/Documents/datasets/chi3d/chi3d_full/assets/chi3d_train.json
   test_split_file: /home/cc/Documents/datasets/chi3d/chi3d_full/assets/chi3d_test.json

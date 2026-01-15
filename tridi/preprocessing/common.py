@@ -313,12 +313,12 @@ def contacts_worker(obj_mesh, obj_verts, sbj_verts, sbj_faces, contact_threshold
 
 def preprocess_worker(
     sample: DatasetSample
-):
+):  
     # sample = apply_symmetry(sample)
     # sample = apply_z_rotation(sample)
 
-    # sample.sbj_mesh.vertices = np.copy(sample.sbj_pc)
-    # sample.second_sbj_mesh.vertices = np.copy(sample.second_sbj_pc)
+    sample.sbj_mesh.vertices = np.copy(sample.sbj_pc)
+    sample.second_sbj_mesh.vertices = np.copy(sample.second_sbj_pc)
 
     # # invert only if symmetry augmentation is applied
     # sample.sbj_mesh.invert()
