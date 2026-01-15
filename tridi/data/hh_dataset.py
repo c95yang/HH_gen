@@ -29,12 +29,12 @@ class HHDataset:
     name: str # 'behave', 'embody3d', 'interhuman', 'chi3d'
     root: Path
     split: str # 'train', 'test'
-    augment_symmetry: bool
-    augment_rotation: bool
     downsample_factor: int = 1
     h5dataset_path: Path = None
     preload_data: bool = True
     subjects: Optional[List[str]] = field(default_factory=list)
+    augment_rotation: bool = False
+    augment_symmetry: bool = False
     split_file: Optional[str] = None
     behave_repeat_fix: bool = False  # repeating the data for classes with only 1 fps annotations"
     include_pointnext: bool = False
@@ -231,8 +231,6 @@ class HHDataset:
                                                                             sbj_global=sbj_smpl['global_orient'],
                                                                             second_sbj_global=second_sbj_smpl['global_orient'])
                 
-
-
         # <== save parameters
         sbj_pose = np.concatenate([
             sequence['sbj_smpl_body'][sample.t_stamp],

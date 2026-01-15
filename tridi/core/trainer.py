@@ -183,7 +183,7 @@ class Trainer:
                     wandb_log['lr'] = self.optimizer.param_groups[0]['lr']
                     wandb_log['step'] = self.train_state.step
                     wandb_log['relative_step'] = self.train_state.step - self.train_state.initial_step
-                    wandb.log(wandb_log, step=self.train_state.step)
+                    wandb.log(wandb_log)
 
                 # Save checkpoint
                 if (self.train_state.step % self.cfg.train.checkpoint_freq == 0):
@@ -215,7 +215,7 @@ class Trainer:
                 val_log[f"VAL_{k}"] = val_metrics[k] / (val_counters[k] + 1e-4)
 
             if self.cfg.logging.wandb:
-                wandb.log(val_log, step=self.train_state.step)
+                wandb.log(val_log)
 
             # Epoch complete
             self.train_state.epoch += 1

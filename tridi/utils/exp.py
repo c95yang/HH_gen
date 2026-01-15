@@ -204,7 +204,9 @@ def init_wandb(cfg: ProjectConfig):
                 dir=str(cfg.run.path), resume=None,
                 entity=cfg.logging.wandb_entity,
                 job_type=cfg.run.job, config=OmegaConf.to_container(cfg),
-                settings=wandb.Settings(start_method=init_method)
+                settings=wandb.Settings(
+                    start_method=init_method
+                )
             )
             wandb.run.log_code(root=get_script_path(),
                 include_fn=lambda p: any(p.endswith(ext) for ext in ('.py', '.json', '.yaml', '.md', '.txt.', '.gin')),

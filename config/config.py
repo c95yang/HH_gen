@@ -91,8 +91,8 @@ class LoggingConfig:
     # wandb_project: str = 'hhgen'
     # wandb_entity: str = 'selin'
 
-    # wandb_project: str = 'HH-Gen'
-    # wandb_entity: str = 'c-yang'
+    #wandb_project: str = 'HH-Gen'
+    #wandb_entity: str = 'c-yang'
 # ============================================================
 
 # ========================= SAMPLE ===========================
