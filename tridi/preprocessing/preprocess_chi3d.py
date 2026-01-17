@@ -26,54 +26,127 @@ def split(cfg):
     # convert to Path
     chi3d_path = Path(cfg.chi3d.root)
     assets_path = Path(cfg.chi3d.assets)
-    #print(f"split():{chi3d_path}")
 
-    # merge split files to a single json
+    val_train = []
     train = []
+    val = []
     test = []
 
+    # get path of each sequence: data/raw/chi3d/train/<subj>/smplx/<motion> <index>.json
     sequences = get_sequences_list("chi3d", chi3d_path)
     sequences.sort()
-    # Split Scenario 1: specific motions for test the rest for train
 
-    for sequence in sequences:
-        if "Hug" in sequence.name:
-            test.append(str(sequence))
-        elif "Handshake" in sequence.name:
-            test.append(str(sequence))
-        else:
-            train.append(str(sequence))
-
-    # Split scenario 2: 80% of each sequence for train, 20% for test
-
-    # for sequence in sequences:      
-    #     test.append(str(sequence))
-    #     train.append(str(sequence))
+    #----------------------------------------------------------------------------------------
+    # 1. create split.json for preprocessing
+    #----------------------------------------------------------------------------------------
     
-    # Split scenario 3: 80% of each motion for train, 20% of each motion for test
-    # motion_dict={}
-    # for sequence in sequences:
+    #----------------------------------------------------------------------------------------
+    # 1.1 Split test
+    #----------------------------------------------------------------------------------------
+    
+    '''
+    Test always 20% of each subj_motion
+    '''
+    #create a dictionary, key: <subj>_<motion>, value: <subj>/smplx/<motion> <index>.json
+    motion_dict={}
+    for sequence in sequences:
+        motion, _ = sequence.stem.split()
+        sbj_name = sequence.parents[1].name
+        key = f"{sbj_name}_{motion}"
+        motion_dict.setdefault(key, []).append(str(sequence))
+
+    # get 20% of each <subj>_<motion> for testing
+    for seq_list in motion_dict.values():
+        split_idx = int(0.8 * len(seq_list))
+        val_train.extend(seq_list[:split_idx])
+        test.extend(seq_list[split_idx:])
+
+    # print("VALTRAIN",val_train)
+    # print("TEST", test)
+    # print(len(test)/len(sequences))
+
+    #----------------------------------------------------------------------------------------
+    # 1.2 Split val&train
+    #----------------------------------------------------------------------------------------
+    
+
+    '''
+    Split Scenario 1:
+    train and val from same sequences
+    validation and training are sampled along all the sequence (e.g., you take one frame every 10 for training [0, 10, 20, 30,...], and for validation the frames in the middle  [5, 15, 25, 35, ...]
+    10fps
+    '''
+    # # each sequence from valtrain is used for val and train
+    # for sequence in val_train:      
+    #     val.append(str(sequence))
+    #     train.append(str(sequence))   
+
+    '''
+    Split Scenario 2:
+    train end eval from same sequences
+    validation and training chunks are disjoing (e.g., you take the frames [0-200] for training and the frames [201-220] for validation)
+    cut off in the middle after the interaction
+    25fps
+    '''
+    # # each sequence from valtrain is used for val and train
+    # for sequence in val_train:      
+    #     val.append(str(sequence))
+    #     train.append(str(sequence)) 
+
+    '''
+    Split Scenario 3:
+    train and val from different sequences of the same subj-motion
+    25fps
+    '''  
+    # #create a dictionary for val_train, key: <subj>_<motion>, value: <subj>/smplx/<motion> <index>.json
+    # tv_motion_dict={}
+    # for sequence in val_train:
+    #     sequence = Path(sequence)
     #     motion, _ = sequence.stem.split()
     #     sbj_name = sequence.parents[1].name
     #     key = f"{sbj_name}_{motion}"
-    #     motion_dict.setdefault(key, []).append(str(sequence))
+    #     tv_motion_dict.setdefault(key, []).append(str(sequence))
 
-    # for seq_list in motion_dict.values():
+    # # get 20% of each <subj>_<motion> for val
+    # for seq_list in tv_motion_dict.values():
     #     split_idx = int(0.8 * len(seq_list))
     #     train.extend(seq_list[:split_idx])
-    #     test.extend(seq_list[split_idx:])
+    #     val.extend(seq_list[split_idx:])
+
+    '''
+    Split Scenario 4:
+    train and val of different sequences of different motions
+    25fps
+    '''
+    # choose hug and handshake for val
+    for sequence in val_train:
+        sequence = Path(sequence)
+        if "Kick" in sequence.name:
+            val.append(str(sequence))
+        elif "Handshake" in sequence.name:
+            val.append(str(sequence))
+        else:
+            train.append(str(sequence))
+    
+    # print(f"train samples length:{len(train)}")
+    # print(f"val samples length:{len(val)}")
+    # print(f"test samples length:{len(test)}")
 
     split_dict = {
-        'train': train,
+        'train' : train,
+        "val" : val,
         'test' : test
     }
-    # print(f"train samples length:{len(train)}")
-    # print(f"test samples length:{len(test)}")
+
     with open(chi3d_path/"split.json", "w") as f:
         json.dump(split_dict, f, indent=4)
-    
-    # create split files for training
+
+    #----------------------------------------------------------------------------------------
+    # 2. create split files chi3d_train.json, chi3d_val.json, chi3d_test.json for training
+    #----------------------------------------------------------------------------------------
+
     split_train = []
+    split_val = []
     split_test = []
 
     for seq in train:
@@ -82,6 +155,13 @@ def split(cfg):
         sbj_name = seq.parents[1].name
         seq_name = f"{sbj_name}_{motion}_{index}"
         split_train.append(seq_name)
+
+    for seq in val:
+        seq = Path(seq)
+        motion, index= seq.stem.split()
+        sbj_name = seq.parents[1].name
+        seq_name = f"{sbj_name}_{motion}_{index}"
+        split_val.append(seq_name)
 
     for seq in test:
         seq = Path(seq)
@@ -92,6 +172,8 @@ def split(cfg):
 
     with open (assets_path/"chi3d_train.json", "w") as f:
         json.dump(split_train, f, indent=4)
+    with open (assets_path/"chi3d_val.json", "w") as f:
+        json.dump(split_val, f, indent=4)
     with open (assets_path/"chi3d_test.json", "w") as f:
         json.dump(split_test, f, indent=4)
         
@@ -108,7 +190,7 @@ def preprocess(cfg):
     #print(f"preprocess_chi3dfhuman.py. Loaded sequences: {_sequences}")
 
     # filter sequences based on split
-    if cfg.chi3d.split in ["train", "test"]:
+    if cfg.chi3d.split in ["train", "test", "val"]:
         with open(cfg.chi3d.split_file, "r") as fp:
             split = json.load(fp)
             # print(f"Loaded split file {split}")
@@ -129,6 +211,8 @@ def preprocess(cfg):
         hdf5_name += "_10fps"
     elif cfg.chi3d.downsample == "1fps":
         hdf5_name += "_1fps"
+    elif cfg.chi3d.downsample == "25fps":
+        hdf5_name += "_25fps"
     else:
         hdf5_name += "_50fps"
 
@@ -185,51 +269,92 @@ def preprocess(cfg):
         if cfg.chi3d.downsample != "None":
             if cfg.chi3d.downsample == "10fps":
                 downsample_factor = 5
+            elif cfg.chi3d.downsample == "25fps":
+                downsample_factor = 2
             elif cfg.chi3d.downsample == "1fps":
                 downsample_factor = 50
 
         if downsample_factor != 1:
-            # Downsample
-            for key in smplx_params1:
-                smplx_params1[key] = smplx_params1[key][::downsample_factor]
-                smplx_params2[key] = smplx_params2[key][::downsample_factor]
+            if cfg.chi3d.split == "test":
+                print("test setup")
+                # Downsample
+                for key in smplx_params1:
+                    smplx_params1[key] = smplx_params1[key][::downsample_factor]
+                    smplx_params2[key] = smplx_params2[key][::downsample_factor]
+                T = smplx_params1["transl"].shape[0]
+            else: #train or val
+                print("in val or train setup")
+                # Downsample
+                for key in smplx_params1:
+                    smplx_params1[key] = smplx_params1[key][::downsample_factor]
+                    smplx_params2[key] = smplx_params2[key][::downsample_factor]
+                
+                #split
+                '''
+                Split Scenario 1:
+                train and val from same sequences
+                validation and training are sampled along all the sequence (e.g., you take one frame every 10 for training [0, 10, 20, 30,...], and for validation the frames in the middle  [5, 15, 25, 35, ...]
+                10fps
+                '''  
 
-            # Split Scenario 1: specific motions for test the rest for train
-            T = smplx_params1["transl"].shape[0]
+                # #evens-> train, odds-> val
+                # if cfg.chi3d.split == "train":
+                #     for key in smplx_params1:
+                #         smplx_params1[key] = smplx_params1[key][0::2]
+                #         smplx_params2[key] = smplx_params2[key][0::2]
+                # elif cfg.chi3d.split == "val":
+                #     for key in smplx_params1:
+                #         smplx_params1[key] = smplx_params1[key][1::2]
+                #         smplx_params2[key] = smplx_params2[key][1::2]
 
-            # Split scenario 2: 80% of each sequence for train, 20% for test
-            # split_idx = int(0.8 * T_original)
-            # if cfg.chi3d.split == "train":
-            #     for key in smplx_params1:
-            #         smplx_params1[key] = smplx_params1[key][:split_idx]
-            #         smplx_params2[key] = smplx_params2[key][:split_idx]
-            # elif cfg.chi3d.split == "test":
-            #     for key in smplx_params1:
-            #         smplx_params1[key] = smplx_params1[key][split_idx:]
-            #         smplx_params2[key] = smplx_params2[key][split_idx:]
-            # T = smplx_params1["transl"].shape[0]
+                # T = smplx_params1["transl"].shape[0]
+                # print("T:",T)
+                '''
+                Split Scenario 2:
+                train end eval from same sequences
+                validation and training chunks are disjoing (e.g., you take the frames [0-200] for training and the frames [201-220] for validation)
+                cut off in the middle after the interaction
+                25fps
+                '''
 
-            # Split scenario 3: 80% of each motion for train, 20% of each motion for test
-            # T = smplx_params1["transl"].shape[0]
+                #cut in the middle
+                # length = smplx_params1["transl"].shape[0]
 
+                # for key in smplx_params1:
+                #     smplx_params1[key] = smplx_params1[key][: (length + 1) // 2]
+                #     smplx_params2[key] = smplx_params2[key][: (length + 1) // 2]
+                # print("before cut length:",length)
+                # # first 80% for train, last 20% for val
+                # length = smplx_params1["transl"].shape[0]
+                # print("after cut length:",length)
+                # split_idx = int(0.8 * length)
+                # print("split_idx",split_idx)
+                # if cfg.chi3d.split == "train":
+                #     for key in smplx_params1:
+                #         smplx_params1[key] = smplx_params1[key][:split_idx]
+                #         smplx_params2[key] = smplx_params2[key][:split_idx]
+                # elif cfg.chi3d.split == "val":
+                #     for key in smplx_params1:
+                #         smplx_params1[key] = smplx_params1[key][split_idx:]
+                #         smplx_params2[key] = smplx_params2[key][split_idx:]
+                # T = smplx_params1["transl"].shape[0]
+                # print("T:",T)
+                '''
+                Split Scenario 3:
+                train and val from different sequences of the same subj-motion
+                25fps
+                '''  
+                # T = smplx_params1["transl"].shape[0]
+                # print("T:",T)
+                '''
+                Split Scenario 4:
+                train and val of different sequences of different motions
+                25fps
+                '''
+                T = smplx_params1["transl"].shape[0]
+                print("T:",T)
         else: # 50fps
-            # Split Scenario 1: specific motions for test the rest for train
             T = T_original
-
-            # Split scenario 2: 80% of each sequence for train, 20% for test
-            # split_idx = int(0.8 * T_original)
-            # if cfg.chi3d.split == "train":
-            #     for key in smplx_params1:
-            #         smplx_params1[key] = smplx_params1[key][:split_idx]
-            #         smplx_params2[key] = smplx_params2[key][:split_idx]
-            # elif cfg.chi3d.split == "test":
-            #     for key in smplx_params1:
-            #         smplx_params1[key] = smplx_params1[key][split_idx:]
-            #         smplx_params2[key] = smplx_params2[key][split_idx:]
-            # T = smplx_params1["transl"].shape[0]
-
-            # Split scenario 3: 80% of each motion for train, 20% of each motion for test
-            # T = T_original
 
         # ============ 2 extract vertices for subject 1
         preprocess_transforms = []
@@ -403,5 +528,6 @@ if __name__ == "__main__":
     # preprocess data
     preprocess(config)
 
-#python -m tridi.preprocessing.preprocess_chi3d -c ./config/env.yaml -- chi3d.split="train" chi3d.downsample="50fps"
-#python -m tridi.preprocessing.preprocess_chi3d -c ./config/env.yaml -- chi3d.split="test" chi3d.downsample="50fps"
+#python -m tridi.preprocessing.preprocess_chi3d -c ./config/env.yaml -- chi3d.split="train" chi3d.downsample="25fps"
+#python -m tridi.preprocessing.preprocess_chi3d -c ./config/env.yaml -- chi3d.split="val" chi3d.downsample="25fps"
+#python -m tridi.preprocessing.preprocess_chi3d -c ./config/env.yaml -- chi3d.split="test" chi3d.downsample="25fps"
