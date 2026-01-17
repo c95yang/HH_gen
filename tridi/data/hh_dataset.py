@@ -36,7 +36,7 @@ class HHDataset:
     include_pointnext: bool = False
     assets_folder: Optional[Path] = None
     fps: Optional[int] = 30
-    max_timestamps: Optional[int] = None  # 限制每个序列的最大timestamp数量
+    max_timestamps: Optional[int] = None  # limit the maximum number of timestamps per sequence.
     filter_subjects: Optional[List[str]] = None  # only load the specified subjects
 
     def __post_init__(self) -> None:
@@ -85,7 +85,7 @@ class HHDataset:
         sample = self.data[idx]
         sequence = self.h5dataset[sample.sequence]
 
-        sbj_gender = sequence.attrs['gender']
+        sbj_gender = sequence.attrs['sbj_gender']
         sbj_pose = np.concatenate([
             sequence['sbj_smpl_body'][sample.t_stamp],
             sequence['sbj_smpl_lh'][sample.t_stamp],
@@ -97,7 +97,7 @@ class HHDataset:
         sbj_global = matrix_to_rotation_6d(sbj_global.reshape(3, 3)).reshape(-1)
         sbj_pose = matrix_to_rotation_6d(sbj_pose).reshape(-1)
         
-        second_sbj_gender = sbj_gender
+        second_sbj_gender = sequence.attrs['second_sbj_gender']
         second_sbj_pose = np.concatenate([
             sequence['second_sbj_smpl_body'][sample.t_stamp],
             sequence['second_sbj_smpl_lh'][sample.t_stamp],
@@ -123,13 +123,13 @@ class HHDataset:
             sbj_global=sbj_global,
             sbj_pose=sbj_pose,
             sbj_c=torch.tensor(sequence['sbj_smpl_transl'][sample.t_stamp], dtype=torch.float),
-            sbj_gender=torch.tensor(sbj_gender == 'male', dtype=torch.bool),
+            sbj_gender=torch.tensor(sbj_gender == 'female', dtype=torch.bool),
             #second subject
             second_sbj_shape=torch.tensor(sequence['second_sbj_smpl_betas'][sample.t_stamp], dtype=torch.float),
             second_sbj_global=second_sbj_global,
             second_sbj_pose=second_sbj_pose,
             second_sbj_c=torch.tensor(sequence['second_sbj_smpl_transl'][sample.t_stamp], dtype=torch.float),
-            second_sbj_gender=torch.tensor(second_sbj_gender == 'male', dtype=torch.bool),
+            second_sbj_gender=torch.tensor(second_sbj_gender == 'female', dtype=torch.bool),
 
             scale=torch.tensor(sequence['prep_s'][sample.t_stamp], dtype=torch.float)
         )

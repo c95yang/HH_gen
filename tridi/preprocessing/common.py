@@ -161,10 +161,11 @@ def get_sequences_list(dataset, input_path, subjects=None, objects=None):
     return all_seqs
 
 
-def add_meatada_to_hdf5(seq_group, sbj, T, gender=""):
+def add_meatada_to_hdf5(seq_group, sbj, T, sbj_gender="", second_sbj_gender=""):
     seq_group.attrs['sbj'] = sbj
     seq_group.attrs['T'] = T
-    seq_group.attrs['gender'] = gender
+    seq_group.attrs['sbj_gender'] = sbj_gender
+    seq_group.attrs['second_sbj_gender'] = second_sbj_gender
 
 def add_sequence_datasets_to_hdf5(seq_group, sample, T):
     # object mesh
@@ -317,20 +318,20 @@ def preprocess_worker(
     # ============ 1 set vertices for sbj and obj meshes
     sample.sbj_mesh.vertices = np.copy(sample.sbj_pc)
     sample.second_sbj_mesh.vertices = np.copy(sample.second_sbj_pc)
-    all_vertices = [sample.sbj_mesh.vertices, sample.second_sbj_mesh.vertices]
-    all_vertices = np.concatenate(all_vertices, axis=0)
-    center = all_vertices.mean(axis=0)
-    # print(f"Center: {center}")
+    # all_vertices = [sample.sbj_mesh.vertices, sample.second_sbj_mesh.vertices]
+    # all_vertices = np.concatenate(all_vertices, axis=0)
+    # center = all_vertices.mean(axis=0)
+    # # print(f"Center: {center}")
     
-    sample.sbj_mesh.vertices -= center
-    sample.sbj_joints -= center
-    sample.sbj_pc -= center
-    sample.sbj_smpl['transl'] -= center
+    # sample.sbj_mesh.vertices -= center
+    # sample.sbj_joints -= center
+    # sample.sbj_pc -= center
+    # sample.sbj_smpl['transl'] -= center
     
-    sample.second_sbj_mesh.vertices -= center
-    sample.second_sbj_joints -= center
-    sample.second_sbj_pc -= center
-    sample.second_sbj_smpl['transl'] -= center
+    # sample.second_sbj_mesh.vertices -= center
+    # sample.second_sbj_joints -= center
+    # sample.second_sbj_pc -= center
+    # sample.second_sbj_smpl['transl'] -= center
     
     sample.scale = 1.0
 

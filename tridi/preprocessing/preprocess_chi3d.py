@@ -33,13 +33,36 @@ def split(cfg):
     test = []
 
     sequences = get_sequences_list("chi3d", chi3d_path)
+    sequences.sort()
+    # Split Scenario 1: specific motions for test the rest for train
 
     for sequence in sequences:
-        if "Push" in sequence.name:
+        if "Hug" in sequence.name:
+            test.append(str(sequence))
+        elif "Handshake" in sequence.name:
             test.append(str(sequence))
         else:
             train.append(str(sequence))
-                
+
+    # Split scenario 2: 80% of each sequence for train, 20% for test
+
+    # for sequence in sequences:      
+    #     test.append(str(sequence))
+    #     train.append(str(sequence))
+    
+    # Split scenario 3: 80% of each motion for train, 20% of each motion for test
+    # motion_dict={}
+    # for sequence in sequences:
+    #     motion, _ = sequence.stem.split()
+    #     sbj_name = sequence.parents[1].name
+    #     key = f"{sbj_name}_{motion}"
+    #     motion_dict.setdefault(key, []).append(str(sequence))
+
+    # for seq_list in motion_dict.values():
+    #     split_idx = int(0.8 * len(seq_list))
+    #     train.extend(seq_list[:split_idx])
+    #     test.extend(seq_list[split_idx:])
+
     split_dict = {
         'train': train,
         'test' : test
@@ -124,6 +147,18 @@ def preprocess(cfg):
         sbj_name = sequence.parents[1].name
         seq_name = f"{sbj_name}_{motion}_{index}"
 
+        sbj_gender = "neutral"
+        second_sbj_gender = "neutral"
+
+        if sbj_name == "s02":
+            sbj_gender = "male"
+            second_sbj_gender = "female" 
+        elif sbj_name == "s03":
+            sbj_gender = "male"
+            second_sbj_gender = "female"
+        elif sbj_name == "s04":
+            sbj_gender = "female"
+            second_sbj_gender = "male"
         #print(f"subjects:{subjects}")
 
         # ============ 1 Load subject SMPL param
@@ -154,20 +189,55 @@ def preprocess(cfg):
                 downsample_factor = 50
 
         if downsample_factor != 1:
+            # Downsample
             for key in smplx_params1:
                 smplx_params1[key] = smplx_params1[key][::downsample_factor]
                 smplx_params2[key] = smplx_params2[key][::downsample_factor]
-                T = smplx_params1["transl"].shape[0]
-        else:
+
+            # Split Scenario 1: specific motions for test the rest for train
+            T = smplx_params1["transl"].shape[0]
+
+            # Split scenario 2: 80% of each sequence for train, 20% for test
+            # split_idx = int(0.8 * T_original)
+            # if cfg.chi3d.split == "train":
+            #     for key in smplx_params1:
+            #         smplx_params1[key] = smplx_params1[key][:split_idx]
+            #         smplx_params2[key] = smplx_params2[key][:split_idx]
+            # elif cfg.chi3d.split == "test":
+            #     for key in smplx_params1:
+            #         smplx_params1[key] = smplx_params1[key][split_idx:]
+            #         smplx_params2[key] = smplx_params2[key][split_idx:]
+            # T = smplx_params1["transl"].shape[0]
+
+            # Split scenario 3: 80% of each motion for train, 20% of each motion for test
+            # T = smplx_params1["transl"].shape[0]
+
+        else: # 50fps
+            # Split Scenario 1: specific motions for test the rest for train
             T = T_original
+
+            # Split scenario 2: 80% of each sequence for train, 20% for test
+            # split_idx = int(0.8 * T_original)
+            # if cfg.chi3d.split == "train":
+            #     for key in smplx_params1:
+            #         smplx_params1[key] = smplx_params1[key][:split_idx]
+            #         smplx_params2[key] = smplx_params2[key][:split_idx]
+            # elif cfg.chi3d.split == "test":
+            #     for key in smplx_params1:
+            #         smplx_params1[key] = smplx_params1[key][split_idx:]
+            #         smplx_params2[key] = smplx_params2[key][split_idx:]
+            # T = smplx_params1["transl"].shape[0]
+
+            # Split scenario 3: 80% of each motion for train, 20% of each motion for test
+            # T = T_original
 
         # ============ 2 extract vertices for subject 1
         preprocess_transforms = []
 
-        # create smplh model
+        # create smplx model
 
         sbj_model = smplx.build_layer(
-            model_path=str(cfg.env.smpl_folder), model_type="smplx", gender="male",
+            model_path=str(cfg.env.smpl_folder), model_type="smplx", gender=sbj_gender,
             use_pca=False, num_betas=10, batch_size=T
         )
         # convert parameters sbj1 
@@ -188,14 +258,12 @@ def preprocess(cfg):
         sbj_output = sbj_model(pose2rot=False, get_skin=True, return_full_pose=True, **body_model_params1)
         sbj_verts = tensor_to_cpu(sbj_output.vertices)
         sbj_joints = tensor_to_cpu(sbj_output.joints)
-        sbj_transl = body_model_params1["transl"].numpy()
-        sbj_orient = body_model_params1["global_orient"].numpy().reshape(T, 3, 3)
 
         # save smpl parameters np.array
         sbj_smpl = {
             "betas": body_model_params1["betas"].numpy(),
-            "transl": sbj_transl,
-            "global_orient": sbj_orient.reshape(T, 1, 9),
+            "transl": body_model_params1["transl"].numpy(),
+            "global_orient": body_model_params1["global_orient"].numpy(),
             "body_pose": body_model_params1["body_pose"].numpy(),
             "left_hand_pose": body_model_params1["left_hand_pose"].numpy(),
             "right_hand_pose": body_model_params1["right_hand_pose"].numpy()
@@ -206,14 +274,14 @@ def preprocess(cfg):
             sbj_faces = sbj_model.faces
             sbj_mesh = trimesh.Trimesh(vertices=sbj_verts[i], faces=sbj_faces)
             # save sbj mesh
-            #sbj_mesh.export(target_folder / f"{seq_name}_sbj_{i}_before.ply")
+            #sbj_mesh.export(target_folder / "meshes"/ f"{seq_name}_sbj_{i}.ply")
 
         #print("subject1 extracted")
         # ============ 3 extract vertices for subject 2
   
         # create smplx model
         second_sbj_model = smplx.build_layer(
-            model_path=str(cfg.env.smpl_folder), model_type="smplx", gender="male",
+            model_path=str(cfg.env.smpl_folder), model_type="smplx", gender=second_sbj_gender,
             use_pca=False, num_betas=10, batch_size=T
         )
 
@@ -228,21 +296,19 @@ def preprocess(cfg):
             "right_hand_pose": torch.tensor(smplx_params2['right_hand_pose'],dtype=torch.float).reshape(T, -1, 9),
         }
         if cfg.input_type == "smpl":
-            body_model_params1["left_hand_pose"] = None
-            body_model_params1["right_hand_pose"] = None
+            body_model_params2["left_hand_pose"] = None
+            body_model_params2["right_hand_pose"] = None
 
         # get smpl(-h) vertices
         second_sbj_output = second_sbj_model(pose2rot=False, get_skin=True, return_full_pose=True, **body_model_params2)
         second_sbj_verts = tensor_to_cpu(second_sbj_output.vertices)
         second_sbj_joints = tensor_to_cpu(second_sbj_output.joints)
-        second_sbj_transl = body_model_params2["transl"].numpy()
-        second_sbj_smpl = body_model_params2["global_orient"].numpy().reshape(T, 3, 3)
 
         # save smpl parameters np.array
         second_sbj_smpl = {
             "betas": body_model_params2["betas"].numpy(),
-            "transl": second_sbj_transl,
-            "global_orient": second_sbj_smpl.reshape(T, 1, 9),
+            "transl": body_model_params2["transl"].numpy(),
+            "global_orient": body_model_params2["global_orient"].numpy(),
             "body_pose": body_model_params2["body_pose"].numpy(),
             "left_hand_pose": body_model_params2["left_hand_pose"].numpy(),
             "right_hand_pose": body_model_params2["right_hand_pose"].numpy()
@@ -253,7 +319,7 @@ def preprocess(cfg):
             second_sbj_faces = second_sbj_model.faces
             second_sbj_mesh = trimesh.Trimesh(vertices=second_sbj_verts[i], faces=second_sbj_faces)
             # save sbj mesh
-            #second_sbj_mesh.export(target_folder / f"{seq_name}_second_sbj_{i}_before.ply")
+            #second_sbj_mesh.export(target_folder / "meshes"/ f"{seq_name}_second_sbj_{i}.ply")
         # ===========================================
         # print("subject2 extracted")
         # ============ 7 preprocess each time stamp in parallel
@@ -309,7 +375,7 @@ def preprocess(cfg):
             h5py_file.create_group(seq_name)
         seq_group = h5py_file[seq_name]
         add_sequence_datasets_to_hdf5(seq_group, preprocess_results[0], T)
-        add_meatada_to_hdf5(seq_group, seq_name, T, "male")
+        add_meatada_to_hdf5(seq_group, seq_name, T, sbj_gender, second_sbj_gender)
         for sample in preprocess_results:
             sample.dump_hdf5(seq_group)
         #print("saved to h5")
@@ -337,5 +403,5 @@ if __name__ == "__main__":
     # preprocess data
     preprocess(config)
 
-#python -m tridi.preprocessing.preprocess_chi3d -c ./config/env.yaml -- chi3d.split="train" chi3d.downsample="10fps"
-#python -m tridi.preprocessing.preprocess_chi3d -c ./config/env.yaml -- chi3d.split="test" chi3d.downsample="1fps"
+#python -m tridi.preprocessing.preprocess_chi3d -c ./config/env.yaml -- chi3d.split="train" chi3d.downsample="50fps"
+#python -m tridi.preprocessing.preprocess_chi3d -c ./config/env.yaml -- chi3d.split="test" chi3d.downsample="50fps"
