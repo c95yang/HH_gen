@@ -318,20 +318,20 @@ def preprocess_worker(
     # ============ 1 set vertices for sbj and obj meshes
     sample.sbj_mesh.vertices = np.copy(sample.sbj_pc)
     sample.second_sbj_mesh.vertices = np.copy(sample.second_sbj_pc)
-    all_vertices = [sample.sbj_mesh.vertices, sample.second_sbj_mesh.vertices]
-    all_vertices = np.concatenate(all_vertices, axis=0)
-    center = all_vertices.mean(axis=0)
-    # print(f"Center: {center}")
+    # all_vertices = [sample.sbj_mesh.vertices, sample.second_sbj_mesh.vertices]
+    # all_vertices = np.concatenate(all_vertices, axis=0)
+    # center = all_vertices.mean(axis=0)
+    # # print(f"Center: {center}")
     
-    sample.sbj_mesh.vertices -= center
-    sample.sbj_joints -= center
-    sample.sbj_pc -= center
-    sample.sbj_smpl['transl'] -= center
+    # sample.sbj_mesh.vertices -= center
+    # sample.sbj_joints -= center
+    # sample.sbj_pc -= center
+    # sample.sbj_smpl['transl'] -= center
     
-    sample.second_sbj_mesh.vertices -= center
-    sample.second_sbj_joints -= center
-    sample.second_sbj_pc -= center
-    sample.second_sbj_smpl['transl'] -= center
+    # sample.second_sbj_mesh.vertices -= center
+    # sample.second_sbj_joints -= center
+    # sample.second_sbj_pc -= center
+    # sample.second_sbj_smpl['transl'] -= center
     
     sample.scale = 1.0
 
