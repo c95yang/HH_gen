@@ -33,7 +33,7 @@ def forward_smplx(g, prefix: str, smpl_layer, start: int, end: int, device: str)
     lh   = g[f"{prefix}_smpl_lh"][start:end]
     rh   = g[f"{prefix}_smpl_rh"][start:end]
 
-    # 兼容两种存法：(B,*,9) 或 (B,*,3,3)
+    # Compatible with two storage formats: (B, , 9) or (B, , 3, 3).
     def norm_rot(arr):
         arr = np.asarray(arr)
         if arr.ndim >= 3 and arr.shape[-1] == 9:
@@ -81,7 +81,7 @@ def main():
     device = args.device
     chunk = args.chunk
 
-    # 预读一个 seq，确认 T / joints key
+    # Read one sequence to verify the T/joints keys.
     with h5py.File(h5_path, "r") as f:
         seq0 = list(f.keys())[0]
         g0 = f[seq0]
@@ -92,7 +92,7 @@ def main():
         has_v0 = (f"{args.prefix}_v" in g0)
         print(f"[INFO] has {args.prefix}_v: {has_v0}")
 
-    # 只有需要 vertices 时才建 SMPL layer（省点初始化开销）
+    # Initialize the SMPL layer only when vertices are required to reduce overhead.
     smpl_m, smpl_f = build_smplx_layers(args.smpl_folder, batch_size=chunk, device=device)
 
     with h5py.File(h5_path, "r+") as f:
@@ -103,21 +103,21 @@ def main():
             gender = g.attrs.get("gender", "male")
             smpl = smpl_m if str(gender).lower().startswith("m") else smpl_f
 
-            # joints 必须存在
+            # joints required
             if f"{args.prefix}_j" not in g:
                 raise KeyError(f"{seq}: missing {args.prefix}_j")
 
-            # vertices: 只有要修才处理
+            # vertices: process only if correction is required.
             need_v = args.fix_vertices
             have_v = (f"{args.prefix}_v" in g)
 
-            # 如果用户要修 v，但 HDF5 没 v
+            # v requested but not in HDF5
             if need_v and (not have_v) and (not args.create_missing_vertices):
-                # 直接跳过 vertices，不炸
+                # skip vertices, no error thrown
                 print(f"[WARN] {seq}: missing {args.prefix}_v, skip vertices (add --create_missing_vertices to create)")
                 need_v = False
 
-            # 如果要创建缺失的 v，先跑 1 帧推断 V
+            # To create missing v, first infer V on 1 frame
             if need_v and (not have_v) and args.create_missing_vertices:
                 v1, _ = forward_smplx(g, args.prefix, smpl, 0, 1, device=device)
                 V = v1.shape[1]
@@ -132,7 +132,7 @@ def main():
                 have_v = True
                 print(f"[INFO] {seq}: created {args.prefix}_v with shape {(T, V, 3)}")
 
-            # 主循环：chunk 计算 + 写回
+            # main loop: compute chunks + write back
             for start in range(0, T, chunk):
                 end = min(T, start + chunk)
                 v, j = forward_smplx(g, args.prefix, smpl, start, end, device=device)
