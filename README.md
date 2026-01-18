@@ -102,6 +102,20 @@ python main.py -c config/env.yaml scenarios/chi3d.yaml -- \
   sample.dataset=normal \
   sample.repetitions=3
 ```
+run these two codes below to fix sbj_j from hdf5 file
+```bash
+python fix_second_sbj_transl_from_j.py \
+  --h5 /media/uv/Data/workspace/HH_gen/tridi/data/preprocessed/chi3d_smplx/dataset_test_50fps.hdf5 \
+  --smpl_folder /media/uv/Data/workspace/HH_gen/tridi/data/smplx_models \
+  --prefix second_sbj
+```
+
+```bash
+python fix_second_sbj_transl_from_j.py \
+  --h5 /media/uv/Data/workspace/HH_gen/tridi/data/preprocessed/chi3d_smplx/dataset_train_50fps.hdf5 \
+  --smpl_folder /media/uv/Data/workspace/HH_gen/tridi/data/smplx_models \
+  --prefix second_sbj
+```
 
 Use the command below to run evaluation on the generated samples. The `eval.sampling_target` parameter controls 
 which modalities are evaluated (possible values: `sbj_contact`, `obj_contact`,):
@@ -138,6 +152,9 @@ python main.py -c config/env.yaml scenarios/chi3d.yaml -- \
   eval.use_gen_metrics=false eval.use_rec_metrics=true \
   eval.samples_folder=experiments/008_chi3d2_1fps/artifacts/step_20000_samples
 ```
+
+
+
 
 ## Training
 Use the following command to run the training:

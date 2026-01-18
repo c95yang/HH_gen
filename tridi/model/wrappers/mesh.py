@@ -258,6 +258,20 @@ class MeshModel:
         second_sbj_joints = torch.zeros ((B,127,3), device=self.device)
 
         # masks for gender
+        
+
+        if sbj_gender is None:
+            
+            sbj_gender = torch.zeros((B,), dtype=torch.bool, device=self.device)
+        else:
+            if not torch.is_tensor(sbj_gender):
+                sbj_gender = torch.tensor(sbj_gender, dtype=torch.bool, device=self.device)
+            sbj_gender = sbj_gender.to(self.device).view(-1).bool()
+            if sbj_gender.numel() == 1:
+                sbj_gender = sbj_gender.expand(B)
+            else:
+                sbj_gender = sbj_gender[:B]
+
         sbj_f_mask = sbj_gender.bool()
         sbj_m_mask = sbj_f_mask.logical_not()
 
@@ -270,16 +284,16 @@ class MeshModel:
             params_f = { k: v[sbj_f_mask] for k, v in body_model_params.items() }
 
             sbj_output = self.smpl_f(pose2rot=False, get_skin=True, return_full_pose=True, **params_f)
-            sbj_vertices[sbj_f_mask] = sbj_output['vertices']
-            sbj_joints[sbj_f_mask] = sbj_output['joints']
+            sbj_vertices[sbj_f_mask] = sbj_output.vertices
+            sbj_joints[sbj_f_mask]   = sbj_output.joints
 
         if sbj_m_mask.any() : # male/neutral set to male 
             params_m = { k: v[sbj_m_mask] for k, v in body_model_params.items() }
 
 
             sbj_output = self.smpl_m(pose2rot=False, get_skin=True, return_full_pose=True, **params_m)
-            sbj_vertices[sbj_m_mask] = sbj_output['vertices']
-            sbj_joints[sbj_m_mask] = sbj_output['joints']
+            sbj_vertices[sbj_m_mask] = sbj_output.vertices
+            sbj_joints[sbj_m_mask]   = sbj_output.joints
 
 
         # second subject
@@ -287,15 +301,15 @@ class MeshModel:
             second_params_f = { k: v[second_sbj_f_mask] for k, v in second_body_model_params.items() }
 
             second_sbj_output = self.smpl_f(pose2rot=False, get_skin=True, return_full_pose=True, **second_params_f)
-            second_sbj_vertices[second_sbj_f_mask] = second_sbj_output['vertices']
-            second_sbj_joints[second_sbj_f_mask] = second_sbj_output['joints']
+            second_sbj_vertices[second_sbj_f_mask] = second_sbj_output.vertices
+            second_sbj_joints[second_sbj_f_mask]   = second_sbj_output.joints
 
         if second_sbj_m_mask.any() : # male/neutral set to male 
             second_params_m = { k: v[second_sbj_m_mask] for k, v in second_body_model_params.items() }
 
             second_sbj_output = self.smpl_m(pose2rot=False, get_skin=True, return_full_pose=True, **second_params_m)
-            second_sbj_vertices[second_sbj_m_mask] = second_sbj_output['vertices']
-            second_sbj_joints[second_sbj_m_mask] = second_sbj_output['joints']
+            second_sbj_vertices[second_sbj_m_mask] = second_sbj_output.vertices
+            second_sbj_joints[second_sbj_m_mask]   = second_sbj_output.joints
 
         return sbj_vertices, sbj_joints, second_sbj_vertices, second_sbj_joints
     
@@ -322,16 +336,16 @@ class MeshModel:
             params_f = { k: v[sbj_f_mask] for k, v in body_model_params.items() }
 
             sbj_output = self.smpl_f(pose2rot=False, get_skin=True, return_full_pose=True, **params_f)
-            sbj_vertices[sbj_f_mask] = sbj_output['vertices']
-            sbj_joints[sbj_f_mask] = sbj_output['joints']
+            sbj_vertices[sbj_f_mask] = sbj_output.vertices
+            sbj_joints[sbj_f_mask]   = sbj_output.joints
 
         if sbj_m_mask.any() : # male/neutral set to male 
             params_m = { k: v[sbj_m_mask] for k, v in body_model_params.items() }
 
 
             sbj_output = self.smpl_m(pose2rot=False, get_skin=True, return_full_pose=True, **params_m)
-            sbj_vertices[sbj_m_mask] = sbj_output['vertices']
-            sbj_joints[sbj_m_mask] = sbj_output['joints']
+            sbj_vertices[sbj_m_mask] = sbj_output.vertices
+            sbj_joints[sbj_m_mask]   = sbj_output.joints
 
         return sbj_vertices, sbj_joints
 

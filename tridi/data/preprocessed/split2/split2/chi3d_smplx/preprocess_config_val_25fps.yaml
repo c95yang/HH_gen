@@ -44,9 +44,9 @@ chi3d:
   root: ./data/raw//chi3d/
   target: ./data/preprocessed//chi3d_smplx/
   assets: ./assets/
-  split: test
+  split: val
   split_file: ./data/raw//chi3d//split.json
-  downsample: 1fps
+  downsample: 25fps
 grab:
   root: ./data/raw//grab/
   target: ./data/preprocessed//grab_smplh/

@@ -26,7 +26,7 @@ class H5DataSample(NamedTuple):
 class HHDataset:
     name: str # 'behave', 'embody3d', 'interhuman', 'chi3d'
     root: Path
-    split: str # 'train', 'test'
+    split: str  # 'train', 'val', 'test'
     downsample_factor: int = 1
     h5dataset_path: Path = None
     preload_data: bool = True

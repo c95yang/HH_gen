@@ -1,9 +1,15 @@
 chi3d:
+  root: /media/uv/Data/workspace/HH_gen/tridi/data/preprocessed/chi3d_smplx
   downsample_factor: 1
-  fps_train: 1
-  fps_eval: 1
+  fps_train: 10
+  fps_eval: 10
   augment_rotation: false
   augment_symmetry: false
+
+  train_split_file: /media/uv/Data/workspace/HH_gen/assets/chi3d_train.json
+  val_split_file:   /media/uv/Data/workspace/HH_gen/assets/chi3d_val.json
+  test_split_file:  /media/uv/Data/workspace/HH_gen/assets/chi3d_test.json
+
 model_denoising:
   name: transformer_unidiffuser_3
   dim_timestep_embed: 128
@@ -23,15 +29,15 @@ run:
   datasets:
   - chi3d
 dataloader:
-  batch_size: 2
-  workers: 0
+  batch_size: 2048
+  workers: 12
   sampler: weighted
 train:
   mixed_precision: 'no'
   limit_train_batches: null
   log_step_freq: 100
-  checkpoint_freq: 2500
-  max_steps: 50000
+  checkpoint_freq: 5000
+  max_steps: 100000
   print_step_freq: 100
   limit_val_batches: null
   losses:
@@ -56,6 +62,6 @@ scheduler:
   name: cosine
   kwargs:
     num_warmup_steps: 5000
-    num_training_steps: 50000
+    num_training_steps: 100000
 #python main.py -c config/env.yaml scenarios/chi3d.yaml -- run.name=chi3d2 run.job=train
 

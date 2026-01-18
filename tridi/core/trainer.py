@@ -71,7 +71,11 @@ class Trainer:
         #print("Aux output[3] shape:", aux_output[3].shape)
         output = self.model.split_output(aux_output[3], aux_output)
         sbj_vertices, sbj_joints, second_sbj_vertices, second_sbj_joints = self.mesh_model.get_meshes_wkpts_th(
-            output, return_joints=True
+            output,
+            scale=batch.scale,
+            sbj_gender=batch.sbj_gender,                  
+            second_sbj_gender=batch.second_sbj_gender,    
+            return_joints=True
         )
         output.sbj_vertices = sbj_vertices
         output.sbj_joints = sbj_joints

@@ -1,44 +1,108 @@
 python main.py -c config/env.yaml scenarios/chi3d.yaml -- \
   run.job=sample \
   run.name=chi3d2 \
-  sample.target=meshes \
-  resume.checkpoint="experiments/003_chi3d2/checkpoints/checkpoint-step-0020000.pth" \
-  resume.step=20000 \
-  dataloader.batch_size=2048 \
-  sample.mode=sample_01 \
+  sample.target=hdf5 \
+  resume.checkpoint="experiments/009_chi3d2/checkpoints/checkpoint-step-0050000.pth" \
+  resume.step=50000 \
+  dataloader.batch_size=64 \
+  sample.mode=sample_10 \
   run.datasets='[chi3d]' \
   sample.dataset=normal \
-  sample.repetitions=3
+  sample.repetitions=20
 
 python main.py -c config/env.yaml scenarios/chi3d.yaml -- \
   run.job=sample \
-  run.name=chi3d2_1fps \
+  run.name=009_chi3d2 \
   sample.target=hdf5 \
-  resume.checkpoint="experiments/003_chi3d2/checkpoints/checkpoint-step-0020000.pth" \
-  resume.step=20000 \
+  resume.checkpoint="experiments/009_chi3d2/checkpoints/checkpoint-step-0050000.pth" \
+  resume.step=50000 \
   run.datasets='["chi3d"]' \
-  chi3d.fps_eval=1 \
+  chi3d.fps_eval=50 \
   chi3d.test_split_file="/media/uv/Data/workspace/HH_gen/tridi/data/preprocessed/chi3d_smplx/chi3d_test_1fps_split.json" \
+  dataloader.batch_size=256 \
+  dataloader.workers=0 \
+  sample.mode=sample_10 \
+  sample.dataset=normal \
+  sample.repetitions=20
+
+python main.py -c config/env.yaml scenarios/chi3d.yaml -- \
+  run.job=sample \
+  run.name=009_chi3d2 \
+  sample.target=meshes \
+  resume.checkpoint="experiments/009_chi3d2/checkpoints/checkpoint-step-0050000.pth" \
+  resume.step=50000 \
+  run.datasets='["chi3d"]' \
+  chi3d.fps_eval=50 \
   dataloader.batch_size=256 \
   dataloader.workers=0 \
   sample.mode=sample_01 \
   sample.dataset=normal \
   sample.repetitions=3
 
+
+python fix_second_sbj_transl_from_j.py \
+  --h5 /media/uv/Data/workspace/HH_gen/tridi/data/preprocessed/chi3d_smplx/dataset_test_1fps.hdf5 \
+  --smpl_folder /media/uv/Data/workspace/HH_gen/tridi/data/smplx_models \
+  --prefix second_sbj
+
+python fix_second_sbj_transl_from_j.py \
+  --h5 /media/uv/Data/workspace/HH_gen/tridi/data/preprocessed/chi3d_smplx/dataset_train_50fps.hdf5 \
+  --smpl_folder /media/uv/Data/workspace/HH_gen/tridi/data/smplx_models \
+  --prefix second_sbj
+
+
+python - <<'PY'
+import h5py, torch
+from tridi.model.wrappers.mesh import MeshModel
+
+gt="/media/uv/Data/workspace/HH_gen/tridi/data/preprocessed/chi3d_smplx/dataset_test_50fps.hdf5"
+smpl_folder="/media/uv/Data/workspace/HH_gen/tridi/data/smplx_models"
+mesh = MeshModel(model_path=smpl_folder, batch_size=1, device="cuda")
+
+def run(prefix, g):
+    betas = torch.tensor(g[f"{prefix}_smpl_betas"][0:1], dtype=torch.float32, device="cuda")
+    transl= torch.tensor(g[f"{prefix}_smpl_transl"][0:1], dtype=torch.float32, device="cuda")
+    glob  = torch.tensor(g[f"{prefix}_smpl_global"][0:1], dtype=torch.float32, device="cuda")
+    body  = torch.tensor(g[f"{prefix}_smpl_body"][0:1], dtype=torch.float32, device="cuda")
+    lh    = torch.tensor(g[f"{prefix}_smpl_lh"][0:1], dtype=torch.float32, device="cuda")
+    rh    = torch.tensor(g[f"{prefix}_smpl_rh"][0:1], dtype=torch.float32, device="cuda")
+    params = dict(betas=betas, transl=transl, global_orient=glob,
+                  body_pose=body, left_hand_pose=lh, right_hand_pose=rh)
+    v,j = mesh.get_smpl_th_single(params, None)
+    j = j[0].detach().cpu()
+    j_gt = torch.tensor(g[f"{prefix}_j"][0], dtype=torch.float32)
+    diff = (j - j_gt)
+    print(prefix, "J err mean/max:", diff.abs().mean().item(), diff.abs().max().item())
+
+with h5py.File(gt,"r") as f:
+    seq=list(f.keys())[0]
+    g=f[seq]
+    print("seq:", seq)
+    run("sbj", g)
+    run("second_sbj", g)
+PY
+
+
+python fix_second_sbj_transl_from_j.py \
+  --h5 /media/uv/Data/workspace/HH_gen/tridi/data/preprocessed/chi3d_smplx/dataset_test_50fps.hdf5 \
+  --smpl_folder /media/uv/Data/workspace/HH_gen/tridi/data/smplx_models \
+  --prefix second_sbj
+
+
 python main.py -c config/env.yaml scenarios/chi3d.yaml -- \
-  run.job=eval run.name=008_chi3d2_1fps resume.step=20000 \
+  run.job=eval run.name=009_chi3d2 resume.step=50000 \
   'run.datasets=["chi3d"]' \
   'eval.sampling_target=["sbj","second_sbj"]' \
   eval.use_gen_metrics=true eval.use_rec_metrics=false
 
 python main.py -c config/env.yaml scenarios/chi3d.yaml -- \
-  run.job=eval run.name=008_chi3d2_1fps resume.step=20000 \
+  run.job=eval run.name=009_chi3d2 resume.step=50000 \
   'run.datasets=["chi3d"]' \
   'eval.sampling_target=["sbj"]' \
   eval.use_gen_metrics=false eval.use_rec_metrics=true
 
 python main.py -c config/env.yaml scenarios/chi3d.yaml -- \
-  run.job=eval run.name=008_chi3d2_1fps resume.step=20000 \
+  run.job=eval run.name=009_chi3d2 resume.step=50000 \
   'run.datasets=["chi3d"]' \
   'eval.sampling_target=["second_sbj"]' \
   eval.use_gen_metrics=false eval.use_rec_metrics=true
@@ -49,3 +113,4 @@ python main.py -c config/env.yaml scenarios/chi3d.yaml -- \
   'eval.sampling_target=["sbj"]' \
   eval.use_gen_metrics=false eval.use_rec_metrics=true \
   eval.samples_folder=experiments/008_chi3d2_1fps/artifacts/step_20000_samples
+
