@@ -417,67 +417,9 @@ def get_sequences_for_nn(cfg, dataset_list: list, hdf5_files: Dict[str, Path]) -
     return sequences
 
 
-# ---------------------------
-# Feature loaders
-# ---------------------------
-def get_features_for_class_specific_nn(
-    knn, sequences: Dict[str, List[Tuple[str, str, str]]],
-    hdf5_files: Dict[str, Path],
-    objname2classid: Dict[str, int],
-    is_train: bool = True
-):
-    if is_train:
-        features, labels, t_stamps = defaultdict(list), defaultdict(list), defaultdict(list)
-    else:
-        features, labels, t_stamps = {}, {}, {}
-
-    for dataset_name, sequences_list in sequences.items():
-        if not is_train:
-            features[dataset_name] = defaultdict(list)
-            labels[dataset_name] = defaultdict(list)
-            t_stamps[dataset_name] = defaultdict(list)
-
-        with h5py.File(hdf5_files[dataset_name], "r") as hdf5_dataset:
-            for sequence in tqdm(sequences_list, ncols=80, leave=False):
-                _features, class_id, _labels = get_data_for_sequence(
-                    knn, sequence, dataset_name, hdf5_dataset, objname2classid
-                )
-                if _features.size == 0:
-                    continue
-
-                sbj, obj, act = sequence
-                _t = [f"{sbj}/{obj}/{act}/t{t_stamp:05d}" for t_stamp in range(_labels.shape[0])]
-
-                if is_train:
-                    features[class_id].append(_features)
-                    labels[class_id].append(_labels)
-                    t_stamps[class_id].extend(_t)
-                else:
-                    features[dataset_name][class_id].append(_features)
-                    labels[dataset_name][class_id].append(_labels)
-                    t_stamps[dataset_name][class_id].extend(_t)
-
-    # concat
-    all_class_ids = set(objname2classid.values())
-    for cid in all_class_ids:
-        if is_train:
-            if len(features[cid]) == 0:
-                continue
-            features[cid] = np.concatenate(features[cid], axis=0)
-            labels[cid] = np.concatenate(labels[cid], axis=0)
-        else:
-            for dataset_name in sequences.keys():
-                if cid in features[dataset_name] and len(features[dataset_name][cid]) > 0:
-                    features[dataset_name][cid] = np.concatenate(features[dataset_name][cid], axis=0)
-                    labels[dataset_name][cid] = np.concatenate(labels[dataset_name][cid], axis=0)
-
-    return features, labels, t_stamps
-
-
 def get_features_for_nn(
     knn, sequences: Dict[str, List[Tuple[str, str, str]]],
     hdf5_files: Dict[str, Path],
-    objname2classid: Optional[Dict[str, int]],
     is_train: bool = True
 ):
     """

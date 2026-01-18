@@ -1,8 +1,8 @@
 ## Training
 
 ```bash
-python main.py -c config/env.yaml scenarios/chi3d_full.yaml -- \
-  run.name=chi3d_full run.job=train
+python main.py -c config/env.yaml scenarios/chi3d_overfit.yaml -- \
+  run.name=004_chi3d_overfit run.job=train
 ```
 
 ## Sample
@@ -16,7 +16,7 @@ python main.py -c config/env.yaml \
   sample.target=meshes \
   resume.checkpoint="experiments/002_chi3d_full/checkpoints/checkpoint-step-0008000.pth" \
   resume.step=8000 \
-  dataloader.batch_size=2048 \
+  dataloader.batch_size=4096 \
   sample.mode=sample_01 \
   run.datasets='[chi3d]' \
   sample.dataset=normal \
@@ -25,13 +25,13 @@ python main.py -c config/env.yaml \
 HDF5
 ```bash
 python main.py -c config/env.yaml \
-  scenarios/chi3d_aug.yaml -- \
+  scenarios/chi3d_overfit_aug.yaml -- \
   run.job=sample \
-  run.name=003_chi3d_aug \
+  run.name=005_chi3d_overfit_aug \
   sample.target=hdf5 \
-  resume.checkpoint="experiments/003_chi3d_aug/checkpoints/checkpoint-step-0008000.pth" \
+  resume.checkpoint="experiments/005_chi3d_overfit_aug/checkpoints/checkpoint-step-0008000.pth" \
   resume.step=8000 \
-  dataloader.batch_size=2048 \
+  dataloader.batch_size=4096 \
   sample.mode=sample_01 \
   run.datasets='[chi3d]' \
   sample.dataset=normal \
@@ -42,9 +42,9 @@ python main.py -c config/env.yaml \
 
 ```bash
 python main.py -c config/env.yaml \
-  scenarios/chi3d_aug.yaml -- \
+  scenarios/chi3d_overfit_aug.yaml -- \
   run.job=eval \
-  run.name=003_chi3d_aug \
+  run.name=005_chi3d_overfit_aug \
   resume.step=8000 \
   run.datasets=["chi3d"] \
   eval.sampling_target=["sbj","second_sbj"] \

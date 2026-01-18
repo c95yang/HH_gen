@@ -186,7 +186,6 @@ class Evaluator:
                     logger.info(f"\t  sampling target: {sample_target}")
                     metrics = {"1-NNA": [], "COV": [], "MMD": [], "SD": []}
                     samples_files = list(samples_folder.glob(f"{sample_target}/samples_rep_*.hdf5"))
-                    print(samples_files)
 
                     for samples_file in samples_files:
                         metrics["1-NNA"].append(generation.nearest_neighbor_accuracy(
