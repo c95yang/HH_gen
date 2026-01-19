@@ -192,7 +192,7 @@ def sample_distance(
     knn.sample_target = sample_target
 
     train_datasets = [(reference_dataset, reference_set)]
-    test_datasets = [("samples", "test")]
+    test_datasets = [("samples", "")]
 
     knn, test_queries, test_labels, test_t_stamps = create_nn_model(
         cfg, knn, train_datasets, test_datasets

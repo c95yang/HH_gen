@@ -155,64 +155,36 @@ def get_contact_similarity_sampled_sbj(
 def get_sbj_metrics(
     cfg: ProjectConfig,
     samples_file: Union[str, Path],
-    dataset: str
+    dataset: str,
+    sample_target: str = "sbj"
 ):
     test_datasets = [(dataset, "test")]
     test_hdf5 = get_hdf5_files_for_nn(cfg, test_datasets)
     test_sequences = get_sequences_for_nn(cfg, test_datasets, test_hdf5)
 
     mpjpe_results, mpjpe_pa_results = [], []
-    mpjpe_results_second_sbj, mpjpe_pa_results_second_sbj = [], []
-
     with h5py.File(test_hdf5[dataset], "r") as test_hdf5_dataset, \
-         h5py.File(samples_file, "r") as samples_hdf5_dataset:
+        h5py.File(samples_file, "r") as samples_hdf5_dataset:
 
         for sequence in tqdm(test_sequences[dataset], ncols=80, leave=False):
-            # 兼容 sequence 是 tuple 或 string
-            if isinstance(sequence, (list, tuple)) and len(sequence) == 3:
-                sbj, obj, act = sequence
-            else:
-                sbj, obj, act = str(sequence), "", ""
+            sbj, _, _ = sequence
 
-            # 缺序列就跳过（你那种只保留2个序列的小 h5 很常见）
-            if sbj not in test_hdf5_dataset or sbj not in samples_hdf5_dataset:
-                continue
+            test_sequence = test_hdf5_dataset[sbj]
+            sampled_sequence = samples_hdf5_dataset[sbj]
+            T = test_sequence.attrs["T"]
 
-            try:
-                test_sequence = _get_seq_group(test_hdf5_dataset, sbj, obj, act)
-                sampled_sequence = _get_seq_group(samples_hdf5_dataset, sbj, obj, act)
-            except KeyError:
-                # HOI 层级缺 obj_act 或者 samples 没写进去
-                continue
+            T_stamps = list(range(T))
+            for t_stamp in T_stamps:
+                test_joints = test_sequence[sample_target + "_j"][t_stamp]
+                sampled_joints = sampled_sequence[sample_target + "_j"][t_stamp]
 
-            # 用真实长度做交集：sbj / second_sbj 都要考虑
-            T_sbj = min(_safe_T(test_sequence, "sbj_j"), _safe_T(sampled_sequence, "sbj_j"))
-            T_2   = min(_safe_T(test_sequence, "second_sbj_j"), _safe_T(sampled_sequence, "second_sbj_j"))
-
-            # 两个人都要算的话，就取共同可用帧数
-            T = min(T_sbj, T_2)
-            if T <= 0:
-                continue
-
-            for t_stamp in range(T):
-                # --- sbj ---
-                test_joints = test_sequence["sbj_j"][t_stamp]
-                sampled_joints = sampled_sequence["sbj_j"][t_stamp]
                 mpjpe_results.append(get_mpjpe(sampled_joints, test_joints))
                 mpjpe_pa_results.append(get_mpjpe_pa(sampled_joints, test_joints))
 
-                # --- second sbj ---
-                test_joints_2 = test_sequence["second_sbj_j"][t_stamp]
-                sampled_joints_2 = sampled_sequence["second_sbj_j"][t_stamp]
-                mpjpe_results_second_sbj.append(get_mpjpe(sampled_joints_2, test_joints_2))
-                mpjpe_pa_results_second_sbj.append(get_mpjpe_pa(sampled_joints_2, test_joints_2))
+    mpjpe_results = np.array(mpjpe_results)
+    mpjpe_pa_results = np.array(mpjpe_pa_results)
 
-    mpjpe_results = np.array(mpjpe_results, dtype=np.float32)
-    mpjpe_pa_results = np.array(mpjpe_pa_results, dtype=np.float32)
-    mpjpe_results_second_sbj = np.array(mpjpe_results_second_sbj, dtype=np.float32)
-    mpjpe_pa_results_second_sbj = np.array(mpjpe_pa_results_second_sbj, dtype=np.float32)
-
-    return mpjpe_results, mpjpe_pa_results, mpjpe_results_second_sbj, mpjpe_pa_results_second_sbj
+    return mpjpe_results, mpjpe_pa_results
 
 
 @torch.no_grad()

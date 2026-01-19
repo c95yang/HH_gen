@@ -15,7 +15,6 @@ import torch
 import tqdm
 import trimesh
 from omegaconf import OmegaConf
-from scipy.spatial.transform import Rotation
 
 from .common import (tensor_to_cpu, DatasetSample, preprocess_worker, \
     get_sequences_list, init_preprocessing, \
@@ -26,6 +25,8 @@ def split(cfg):
     # convert to Path
     chi3d_path = Path(cfg.chi3d.root)
     assets_path = Path(cfg.chi3d.assets)
+
+    assets_path.mkdir(exist_ok=True, parents=True)
 
     val_train = []
     train = []
@@ -399,7 +400,8 @@ def preprocess(cfg):
             sbj_faces = sbj_model.faces
             sbj_mesh = trimesh.Trimesh(vertices=sbj_verts[i], faces=sbj_faces)
             # save sbj mesh
-            #sbj_mesh.export(target_folder / "meshes"/ f"{seq_name}_sbj_{i}.ply")
+            if cfg.debug:
+                sbj_mesh.export(target_folder / f"{seq_name}_sbj_{i}_before.ply")
 
         #print("subject1 extracted")
         # ============ 3 extract vertices for subject 2
@@ -443,8 +445,9 @@ def preprocess(cfg):
             # create mesh
             second_sbj_faces = second_sbj_model.faces
             second_sbj_mesh = trimesh.Trimesh(vertices=second_sbj_verts[i], faces=second_sbj_faces)
-            # save sbj mesh
-            #second_sbj_mesh.export(target_folder / "meshes"/ f"{seq_name}_second_sbj_{i}.ply")
+            # save second_sbj mesh
+            if cfg.debug:
+                second_sbj_mesh.export(target_folder / f"{seq_name}_second_sbj_{i}_before.ply")
         # ===========================================
         # print("subject2 extracted")
         # ============ 7 preprocess each time stamp in parallel
@@ -487,8 +490,14 @@ def preprocess(cfg):
                 },
                 preprocess_transforms=preprocess_transforms[t]
             )
-            result = preprocess_worker(sample)
-            preprocess_results.append(result)
+            sample_result = preprocess_worker(sample)
+
+            if cfg.debug:
+                sample_result.sbj_mesh.export(target_folder / f"{seq_name}_sbj_{t}_after.ply")
+                sample_result.second_sbj_mesh.export(target_folder / f"{seq_name}_second_sbj_{t}_after.ply")
+                tqdm.tqdm.write(f"Exported debug meshes for {seq_name} at t={t}")
+
+            preprocess_results.append(sample_result)
         # ===========================================
 
         # print(preprocess_results[0])

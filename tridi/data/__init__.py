@@ -46,8 +46,10 @@ def get_train_dataloader(cfg: ProjectConfig):
             name=dataset_config.name,
             root=Path(dataset_config.root),
             split='train',
-            downsample_factor=1,
+            downsample_factor=dataset_config.downsample_factor,
             subjects=getattr(dataset_config, "train_subjects", []),
+            augment_rotation=dataset_config.augment_rotation,
+            augment_symmetry=dataset_config.augment_symmetry,
             assets_folder=Path(cfg.env.assets_folder),
             fps=dataset_config.fps_train,
             max_timestamps=getattr(dataset_config, "max_timestamps", None),
@@ -58,9 +60,11 @@ def get_train_dataloader(cfg: ProjectConfig):
         val_dataset = HHDataset(
             name=dataset_config.name,
             root=Path(dataset_config.root),
-            split=val_split,  # chi3d=val，其它=test
+            split=val_split,
             downsample_factor=dataset_config.downsample_factor,
             subjects=getattr(dataset_config, f"{val_split}_subjects", None),
+            augment_rotation=False,
+            augment_symmetry=False,
             assets_folder=Path(cfg.env.assets_folder),
             fps=dataset_config.fps_eval,
             max_timestamps=getattr(dataset_config, "max_timestamps", None),
@@ -111,6 +115,7 @@ def get_train_dataloader(cfg: ProjectConfig):
         val_dataset,
         batch_size=cfg.dataloader.batch_size,
         num_workers=cfg.dataloader.workers,
+        drop_last=False,
         shuffle=False,
         pin_memory=True,
         collate_fn=HHBatchData.collate,
@@ -134,7 +139,6 @@ def get_eval_dataloader(cfg: ProjectConfig):
     for dataset_name in cfg.run.datasets:
         if dataset_name == "chi3d":
             dataset_config = cfg.chi3d
-
             # auto choose chi3d_train/val/test.json
             split_file = getattr(dataset_config, f"{split}_split_file")
 
@@ -142,6 +146,8 @@ def get_eval_dataloader(cfg: ProjectConfig):
                 name=dataset_config.name,
                 root=Path(dataset_config.root),
                 split=split,                       # <-- open dataset_{split}_{fps}fps.hdf5
+                augment_symmetry=dataset_config.augment_symmetry,
+                augment_rotation=dataset_config.augment_rotation,
                 downsample_factor=1,
                 subjects=getattr(dataset_config, f"{split}_subjects", None),
                 assets_folder=Path(cfg.env.assets_folder),
@@ -150,7 +156,6 @@ def get_eval_dataloader(cfg: ProjectConfig):
                 filter_subjects=dataset_config.filter_subjects,
                 split_file=split_file,
             )
-
         else:
             # only chi3d
             raise NotImplementedError(f"Only chi3d is supported in your current setup, got: {dataset_name}")

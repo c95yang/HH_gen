@@ -306,4 +306,3 @@ class Sampler:
             # Close hdf5 files
             for h5py_file in h5py_files:
                 h5py_file.close()
-

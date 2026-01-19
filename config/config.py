@@ -88,13 +88,11 @@ class LoggingConfig:
     wandb_project: str = 'hhgen'
     wandb_entity: str = 'yaoweiwang-technical-university-of-munich'
 
-    # wandb: bool = True
     # wandb_project: str = 'hhgen'
     # wandb_entity: str = 'selin_'
 
-    # wandb: bool = True
-    # wandb_project: str = 'HH-Gen'
-    # wandb_entity: str = 'c-yang'
+    #wandb_project: str = 'HH-Gen'
+    #wandb_entity: str = 'c-yang'
 # ============================================================
 
 # ========================= SAMPLE ===========================
@@ -153,3 +151,4 @@ class ProjectConfig:
 
     sample: SampleConfig = SampleConfig()
     eval: EvalConfig = EvalConfig()
+

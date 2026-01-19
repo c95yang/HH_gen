@@ -34,6 +34,7 @@ def parse_arguments():
 def init_logging(cfg: ProjectConfig):
     # Ensure the directory exists before creating the log file
     log_dir = Path(cfg.run.path)
+    print(f"log_dir: {log_dir}")
     log_dir.mkdir(parents=True, exist_ok=True)
     
     logging.basicConfig(
@@ -203,7 +204,9 @@ def init_wandb(cfg: ProjectConfig):
                 dir=str(cfg.run.path), resume=None,
                 entity=cfg.logging.wandb_entity,
                 job_type=cfg.run.job, config=OmegaConf.to_container(cfg),
-                settings=wandb.Settings(start_method=init_method)
+                settings=wandb.Settings(
+                    start_method=init_method
+                )
             )
             wandb.run.log_code(root=get_script_path(),
                 include_fn=lambda p: any(p.endswith(ext) for ext in ('.py', '.json', '.yaml', '.md', '.txt.', '.gin')),

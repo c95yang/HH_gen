@@ -46,6 +46,12 @@ class ConditioningModel(ModelMixin):
         x_t_input = [x_t]
         x_t_cond = []
 
+        # # dropping conditioning for regularization
+        # # check train / eval flag
+        # x_t_cond = torch.cat(x_t_cond, dim=1)  # (B, D_cond)
+        # if self.training and torch.rand(1) < 0.1:
+        #     x_t_cond = torch.zeros_like(x_t_cond)
+
         # Concatenate together all the features
         _input = torch.cat([*x_t_input, *x_t_cond], dim=1)  # (B, D)
 

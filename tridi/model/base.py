@@ -224,11 +224,8 @@ class BaseTriDiModel(ModelMixin):
 
     @staticmethod
     def merge_input_sbj(batch):
-        # concatenate all pose parameters
         sbj_pose = torch.cat([batch.sbj_global, batch.sbj_pose, batch.sbj_c], dim=1)
-        # obtain joint sbj representation
         sbj = torch.cat([batch.sbj_shape, sbj_pose], dim=1)
-
         second_sbj_pose =torch.cat([batch.second_sbj_global, batch.second_sbj_pose, batch.second_sbj_c], dim=1)
         second_sbj = torch.cat([batch.second_sbj_shape, second_sbj_pose], dim=1)
         return sbj, second_sbj

@@ -179,3 +179,6 @@ class PreprocessConfig:
     grab: PreprocessGrabConfig = PreprocessGrabConfig()
     intercap: PreprocessIntercapConfig = PreprocessIntercapConfig()
     omomo: PreprocessOmomoConfig = PreprocessOmomoConfig()
+
+    overfit: bool = False
+    debug: bool = False

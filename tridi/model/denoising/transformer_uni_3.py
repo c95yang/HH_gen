@@ -128,7 +128,6 @@ class TransformertUni3WayModel(nn.Module):
         shape, global_orient, pose, global_transl = torch.split(sbj, [10, 6, 51*6, 3], dim=1)
 
         if is_second:
-            # 第二个subject使用second相关的projection和embedding
             shape_proj = self.projection_second_S_shape(shape)
             shape = shape_proj + self.second_sbj_embedding + self.second_sbj_shape_embedding
 
@@ -141,7 +140,6 @@ class TransformertUni3WayModel(nn.Module):
             global_transl_proj = self.projection_second_S_transl(global_transl)
             global_transl = global_transl_proj + self.second_sbj_embedding + self.second_global_transl_embedding
         else:
-            # 第一个subject使用原始的projection和embedding
             shape = self.projection_S_shape(shape)
             shape = shape + self.sbj_embedding + self.sbj_shape_embedding
 

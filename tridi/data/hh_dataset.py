@@ -31,6 +31,8 @@ class HHDataset:
     h5dataset_path: Path = None
     preload_data: bool = True
     subjects: Optional[List[str]] = field(default_factory=list)
+    augment_rotation: bool = False
+    augment_symmetry: bool = False
     split_file: Optional[str] = None
     behave_repeat_fix: bool = False  # repeating the data for classes with only 1 fps annotations"
     include_pointnext: bool = False
@@ -81,32 +83,169 @@ class HHDataset:
                 data_dict[seq]["_attrs"] = dict(h5_dataset[seq].attrs)
         return data_dict
 
-    def __getitem__(self, idx: int) -> HHBatchData:
-        sample = self.data[idx]
-        sequence = self.h5dataset[sample.sequence]
+    @staticmethod
+    def _apply_z_rotation_augmentation(sbj_transl, second_sbj_transl, sbj_global, second_sbj_global):
+        angle = np.random.choice(np.arange(-np.pi, np.pi, np.pi / 36))
 
-        sbj_gender = sequence.attrs['sbj_gender']
+        cos, sin = np.cos(angle), np.sin(angle)
+        R = np.array([
+            [cos, -sin, 0.0],
+            [sin,  cos, 0.0],
+            [0.0,  0.0, 1.0]
+        ], dtype=np.float32)
+
+        def rot(x):
+            return x @ R.T
+        
+        def rotate_axis_angle(axis_angle, Rz):
+            R_new = Rz @ axis_angle.reshape(3, 3)
+            R_new = R_new.reshape(9)
+            return R_new
+
+        # --- first subject ---
+        sbj_transl = rot(sbj_transl)
+        sbj_global = rotate_axis_angle(
+            sbj_global, R
+        )
+
+        # --- second subject ---
+        second_sbj_transl = rot(second_sbj_transl)
+        second_sbj_global = rotate_axis_angle(
+            second_sbj_global, R
+        )
+
+        return sbj_transl, second_sbj_transl, sbj_global, second_sbj_global
+    
+
+
+    @staticmethod
+    def _apply_symmetry_augmentation(sbj_smpl, second_sbj_smpl):
+        body_sym_map = np.array(
+            [1, 0, 2, 4, 3, 5, 7, 6, 8, 10, 9, 11, 13, 12, 14, 16, 15, 18, 17, 20, 19],
+            dtype=np.int64
+        )
+
+        # (x,y,z)->(-x,y,z)
+        S = np.diag([-1.0, 1.0, 1.0]).astype(np.float32)
+        s_vec = np.array([-1.0, 1.0, 1.0], dtype=np.float32) # for axis-angle flipping
+
+        def flip_points(x):
+            x = np.asarray(x)
+            return x @ S.T
+
+        def flip_rot(x):
+            x = np.asarray(x, dtype=np.float32)
+
+            # axis-angle: (...,3)
+            if x.ndim >= 1 and x.shape[-1] == 3:
+                return x * s_vec
+
+            # rotmat: (...,3,3)
+            if x.shape[-2:] == (3, 3):
+                return S @ x @ S
+
+            # flatten rotmat: (...,9)
+            if x.shape[-1] == 9:
+                R = x.reshape(*x.shape[:-1], 3, 3)
+                Rf = S @ R @ S
+                return Rf.reshape(*x.shape[:-1], 9)
+
+            raise ValueError(f"Unsupported rotation shape: {x.shape}")
+
+        def flip_global_orient_1x9(go):
+            go = np.asarray(go, dtype=np.float32)
+            assert go.shape == (1, 9)
+            R = go.reshape(1, 3, 3)
+            Rf = S[None, :, :] @ R @ S[None, :, :]
+            return Rf.reshape(1, 9)
+
+        def flip_params(params):
+            # transl / geometry space
+            if "transl" in params:
+                params["transl"] = flip_points(params["transl"])
+
+            # global orient
+            if "global_orient" in params:
+                go = params["global_orient"]
+                params["global_orient"] = flip_global_orient_1x9(go)
+
+            # body pose (swap L/R joints then flip)
+            if "body_pose" in params:
+                bp = np.asarray(params["body_pose"])
+                if bp.shape[0] == body_sym_map.shape[0]:
+                    bp = bp[body_sym_map]
+                params["body_pose"] = flip_rot(bp)
+
+            # hands (swap + flip)
+            if "left_hand_pose" in params and "right_hand_pose" in params:
+                lh = flip_rot(params["left_hand_pose"])
+                rh = flip_rot(params["right_hand_pose"])
+                params["left_hand_pose"], params["right_hand_pose"] = rh, lh
+
+            # betas not changed
+            return params
+
+        # --- flip SMPL params ---
+        sbj_smpl = flip_params(sbj_smpl)
+        second_sbj_smpl = flip_params(second_sbj_smpl)
+
+        return sbj_smpl, second_sbj_smpl
+
+    def __getitem__(self, idx: int) -> HHBatchData:
+        sample = self.data[idx] #H5DataSample(sequence='s02_Push_1', name='s02_Push_1', t_stamp=0)
+        sequence = self.h5dataset[sample.sequence]
+        
+        # ==> augmentations
+        sbj_smpl = {
+            "betas": sequence['sbj_smpl_betas'][sample.t_stamp],
+            "transl": sequence['sbj_smpl_transl'][sample.t_stamp],
+            "global_orient": sequence['sbj_smpl_global'][sample.t_stamp],
+            "body_pose": sequence['sbj_smpl_body'][sample.t_stamp],
+            "left_hand_pose": sequence['sbj_smpl_lh'][sample.t_stamp],
+            "right_hand_pose": sequence['sbj_smpl_rh'][sample.t_stamp],
+        }
+
+        second_sbj_smpl = {
+            "betas": sequence['second_sbj_smpl_betas'][sample.t_stamp],
+            "transl": sequence['second_sbj_smpl_transl'][sample.t_stamp],
+            "global_orient": sequence['second_sbj_smpl_global'][sample.t_stamp],
+            "body_pose": sequence['second_sbj_smpl_body'][sample.t_stamp],
+            "left_hand_pose": sequence['second_sbj_smpl_lh'][sample.t_stamp],
+            "right_hand_pose": sequence['second_sbj_smpl_rh'][sample.t_stamp],
+        }
+
+
+
+        if self.augment_symmetry and np.random.rand() > 0.5:
+            sbj_smpl, second_sbj_smpl = self._apply_symmetry_augmentation(sbj_smpl, second_sbj_smpl)
+        if self.augment_rotation and np.random.rand() > 0.25:
+            sbj_smpl['transl'], second_sbj_smpl['transl'], sbj_smpl['global_orient'], second_sbj_smpl['global_orient'] = self._apply_z_rotation_augmentation(
+                                                                            sbj_transl=sbj_smpl['transl'],
+                                                                            second_sbj_transl=second_sbj_smpl['transl'],
+                                                                            sbj_global=sbj_smpl['global_orient'],
+                                                                            second_sbj_global=second_sbj_smpl['global_orient'])
+                
+        # <== save parameters
         sbj_pose = np.concatenate([
             sequence['sbj_smpl_body'][sample.t_stamp],
             sequence['sbj_smpl_lh'][sample.t_stamp],
             sequence['sbj_smpl_rh'][sample.t_stamp],
         ], axis=0).reshape((51, 3, 3))
-        sbj_global = sequence['sbj_smpl_global'][sample.t_stamp]
-        # print("sbj_global: ", sequence['sbj_smpl_global'].shape)
-        # convert to 6d representation
-        sbj_global = matrix_to_rotation_6d(sbj_global.reshape(3, 3)).reshape(-1)
-        sbj_pose = matrix_to_rotation_6d(sbj_pose).reshape(-1)
-        
-        second_sbj_gender = sequence.attrs['second_sbj_gender']
+
         second_sbj_pose = np.concatenate([
             sequence['second_sbj_smpl_body'][sample.t_stamp],
             sequence['second_sbj_smpl_lh'][sample.t_stamp],
             sequence['second_sbj_smpl_rh'][sample.t_stamp],
         ], axis=0).reshape((51, 3, 3))
-        second_sbj_global = sequence['second_sbj_smpl_global'][sample.t_stamp]
-        # convert to 6d representation
-        second_sbj_global = matrix_to_rotation_6d(second_sbj_global.reshape(3, 3)).reshape(-1)
+
+        sbj_global = matrix_to_rotation_6d(sbj_smpl['global_orient'].reshape(3, 3)).reshape(-1)
+        sbj_pose = matrix_to_rotation_6d(sbj_pose).reshape(-1)
+
+        second_sbj_global = matrix_to_rotation_6d(second_sbj_smpl['global_orient'].reshape(3, 3)).reshape(-1)
         second_sbj_pose = matrix_to_rotation_6d(second_sbj_pose).reshape(-1)    
+
+        sbj_gender = sequence.attrs['sbj_gender']
+        second_sbj_gender = sequence.attrs['second_sbj_gender']
 
         # Fill BatchData isntance
         batch_data = HHBatchData(
@@ -119,16 +258,16 @@ class HHDataset:
             second_sbj=sample.sequence,
             t_stamp=sample.t_stamp,
             # subject
-            sbj_shape=torch.tensor(sequence['sbj_smpl_betas'][sample.t_stamp], dtype=torch.float),
+            sbj_shape=torch.tensor(sbj_smpl['betas'], dtype=torch.float),
             sbj_global=sbj_global,
             sbj_pose=sbj_pose,
-            sbj_c=torch.tensor(sequence['sbj_smpl_transl'][sample.t_stamp], dtype=torch.float),
+            sbj_c=torch.tensor(sbj_smpl['transl'], dtype=torch.float),
             sbj_gender=torch.tensor(sbj_gender == 'female', dtype=torch.bool),
-            #second subject
-            second_sbj_shape=torch.tensor(sequence['second_sbj_smpl_betas'][sample.t_stamp], dtype=torch.float),
+            # second subject
+            second_sbj_shape=torch.tensor(second_sbj_smpl['betas'], dtype=torch.float),
             second_sbj_global=second_sbj_global,
             second_sbj_pose=second_sbj_pose,
-            second_sbj_c=torch.tensor(sequence['second_sbj_smpl_transl'][sample.t_stamp], dtype=torch.float),
+            second_sbj_c=torch.tensor(second_sbj_smpl['transl'], dtype=torch.float),
             second_sbj_gender=torch.tensor(second_sbj_gender == 'female', dtype=torch.bool),
 
             scale=torch.tensor(sequence['prep_s'][sample.t_stamp], dtype=torch.float)

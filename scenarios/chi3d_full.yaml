@@ -1,12 +1,11 @@
 chi3d:
-  fps_train: 25
-  fps_eval: 25
+  fps_train: 10
+  fps_eval: 10
   augment_rotation: false
   augment_symmetry: false
-  root: data/preprocessed/chi3d_smplx
-  train_split_file: data/preprocessed/chi3d_smplx/chi3d_train.json
-  val_split_file: data/preprocessed/chi3d_smplx/chi3d_val.json
-  test_split_file: data/preprocessed/chi3d_smplx/chi3d_test.json
+  root: ../chi3d/chi3d_full/chi3d_smplx
+  train_split_file: ../chi3d/chi3d_full/assets/chi3d_train.json
+  test_split_file: ../chi3d/chi3d_full/assets/chi3d_test.json
 model_denoising:
   name: transformer_unidiffuser_3
   dim_timestep_embed: 128
