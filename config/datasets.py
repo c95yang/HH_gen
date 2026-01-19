@@ -26,8 +26,10 @@ class DatasetConfig:
     downsample_factor: int = 1
     fps_train: int = 10
     fps_eval: int = 1
+    
     augment_rotation: bool = True
     augment_symmetry: bool = True
+
     max_timestamps: Optional[int] = None  
     filter_subjects: Optional[List[str]] = None 
 

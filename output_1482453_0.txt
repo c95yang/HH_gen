@@ -1,0 +1,43 @@
+JOB=1482454 ARRAY=0 HOST=node8
+name, compute_cap
+Quadro RTX 5000, 7.5
+/usr/prakt/w0012/miniconda3/envs/tridi/lib/python3.10/site-packages/torch/__init__.py:1617: UserWarning: Please use the new API settings to control TF32 behavior, such as torch.backends.cudnn.conv.fp32_precision = 'tf32' or torch.backends.cuda.matmul.fp32_precision = 'ieee'. Old settings, e.g, torch.backends.cuda.matmul.allow_tf32 = True, torch.backends.cudnn.allow_tf32 = True, allowTF32CuDNN() and allowTF32CuBLAS() will be deprecated after Pytorch 2.9. Please see https://pytorch.org/docs/main/notes/cuda.html#tensorfloat-32-tf32-on-ampere-and-later-devices (Triggered internally at /pytorch/aten/src/ATen/Context.cpp:80.)
+  _C._set_float32_matmul_precision(precision)
+2026-01-19 21:07:59 - INFO - tridi.utils.exp - Initializing wandb...
+2026-01-19 21:07:59 - INFO - tridi.utils.exp - Trying to initialize WANDB try 0
+wandb: WARNING `start_method` is deprecated and will be removed in a future version of wandb. This setting is currently non-functional and safely ignored.
+wandb: Currently logged in as: c-yang (yaoweiwang-technical-university-of-munich) to https://api.wandb.ai. Use `wandb login --relogin` to force relogin
+wandb: setting up run a5fblmvj
+wandb: Tracking run with wandb version 0.22.3
+wandb: Run data is saved locally in /usr/prakt/w0012/HH_gen/experiments/000_chi3d/wandb/run-20260119_210759-a5fblmvj
+wandb: Run `wandb offline` to turn off syncing.
+wandb: Syncing run 000_chi3d
+wandb: ⭐️ View project at https://wandb.ai/yaoweiwang-technical-university-of-munich/hhgen
+wandb: 🚀 View run at https://wandb.ai/yaoweiwang-technical-university-of-munich/hhgen/runs/a5fblmvj
+2026-01-19 21:08:03 - INFO - tridi.utils.exp - Trying to initialize WANDB try 1
+wandb: wandb.init() called while a run is active and reinit is set to 'default', so returning the previous run.
+2026-01-19 21:08:04 - INFO - tridi.utils.exp - Initialized WANDB
+2026-01-19 21:08:04 - INFO - tridi.utils.training - Seeding node 0 with seed 42
+2026-01-19 21:08:04 - INFO - tridi.model - Created model: transformer_unidiffuser_3 with 14.9M trainable params (14.9M total).
+2026-01-19 21:08:05 - INFO - tridi.utils.training - lr = 0.00015 (absolute learning rate)
+2026-01-19 21:08:05 - INFO - tridi.utils.training - Starting training from scratch
+2026-01-19 21:08:05 - INFO - tridi.data.hh_dataset - HHDataset chi3d: loading from data/preprocessed/chi3d_smplx/dataset_train_25fps.hdf5.
+2026-01-19 21:08:05 - INFO - tridi.data.hh_dataset - HH dataset chi3d train has 19768 frames (skipped_missing_seq=0).
+2026-01-19 21:08:05 - INFO - tridi.data.hh_dataset - HHDataset chi3d: split=train #frames=19768
+2026-01-19 21:08:05 - INFO - tridi.data.hh_dataset - HHDataset chi3d: loading from data/preprocessed/chi3d_smplx/dataset_val_25fps.hdf5.
+2026-01-19 21:08:08 - INFO - tridi.data.hh_dataset - HH dataset chi3d val has 5548 frames (skipped_missing_seq=0).
+2026-01-19 21:08:08 - INFO - tridi.data.hh_dataset - HHDataset chi3d: split=val #frames=5548
+2026-01-19 21:08:08 - INFO - tridi.data - Train data length: 19768
+2026-01-19 21:08:08 - INFO - tridi.data - Val data length: 5548
+2026-01-19 21:08:09 - INFO - tridi.core.trainer - ***** Starting training *****
+    Dataset train size: 19_768
+    Dataset val size: 5_548
+    Dataloader train size: 20
+    Dataloader val size: 6
+    Batch size per device = 1024
+    Total train batch size (w. parallel, dist & accum) = 1024
+    Gradient Accumulation steps = 1
+    Max training steps = 300000
+    Training state = TrainState(epoch=0, step=0, initial_step=0)
+log_dir: /usr/prakt/w0012/HH_gen/experiments/000_chi3d
+cfg.resume.checkpoint: None
