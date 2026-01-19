@@ -1,0 +1,49 @@
+JOB=1482046 ARRAY=1 HOST=node8
+name, compute_cap
+Quadro RTX 5000, 7.5
+/usr/prakt/w0012/miniconda3/envs/tridi/lib/python3.10/site-packages/torch/__init__.py:1617: UserWarning: Please use the new API settings to control TF32 behavior, such as torch.backends.cudnn.conv.fp32_precision = 'tf32' or torch.backends.cuda.matmul.fp32_precision = 'ieee'. Old settings, e.g, torch.backends.cuda.matmul.allow_tf32 = True, torch.backends.cudnn.allow_tf32 = True, allowTF32CuDNN() and allowTF32CuBLAS() will be deprecated after Pytorch 2.9. Please see https://pytorch.org/docs/main/notes/cuda.html#tensorfloat-32-tf32-on-ampere-and-later-devices (Triggered internally at /pytorch/aten/src/ATen/Context.cpp:80.)
+  _C._set_float32_matmul_precision(precision)
+2026-01-19 00:58:42 - INFO - tridi.utils.exp - Initializing wandb...
+2026-01-19 00:58:42 - INFO - tridi.utils.exp - Trying to initialize WANDB try 0
+wandb: WARNING `start_method` is deprecated and will be removed in a future version of wandb. This setting is currently non-functional and safely ignored.
+wandb: Currently logged in as: c-yang (yaoweiwang-technical-university-of-munich) to https://api.wandb.ai. Use `wandb login --relogin` to force relogin
+wandb: setting up run xq94fw94
+wandb: Tracking run with wandb version 0.22.3
+wandb: Run data is saved locally in /usr/prakt/w0012/HH_gen/experiments/005_chi3d_overfit_aug/wandb/run-20260119_005843-xq94fw94
+wandb: Run `wandb offline` to turn off syncing.
+wandb: Syncing run 005_chi3d_overfit_aug
+wandb: ⭐️ View project at https://wandb.ai/yaoweiwang-technical-university-of-munich/hhgen
+wandb: 🚀 View run at https://wandb.ai/yaoweiwang-technical-university-of-munich/hhgen/runs/xq94fw94
+2026-01-19 00:59:14 - INFO - tridi.utils.exp - Trying to initialize WANDB try 1
+wandb: wandb.init() called while a run is active and reinit is set to 'default', so returning the previous run.
+2026-01-19 00:59:18 - INFO - tridi.utils.exp - Initialized WANDB
+2026-01-19 00:59:18 - INFO - tridi.utils.training - Seeding node 0 with seed 42
+2026-01-19 00:59:18 - INFO - tridi.model - Created model: transformer_unidiffuser_3 with 14.9M trainable params (14.9M total).
+2026-01-19 00:59:19 - INFO - tridi.utils.training - lr = 0.00015 (absolute learning rate)
+2026-01-19 00:59:19 - INFO - tridi.utils.training - Loading checkpoint from /usr/prakt/w0012/HH_gen/experiments/005_chi3d_overfit_aug/checkpoints/checkpoint-step-0016000.pth
+2026-01-19 00:59:20 - INFO - tridi.utils.training - Loaded model checkpoint from /usr/prakt/w0012/HH_gen/experiments/005_chi3d_overfit_aug/checkpoints/checkpoint-step-0016000.pth
+2026-01-19 00:59:20 - INFO - tridi.utils.training - Loaded optimizer from checkpoint
+2026-01-19 00:59:20 - INFO - tridi.utils.training - Loaded scheduler from checkpoint
+2026-01-19 00:59:20 - INFO - tridi.utils.training - Resumed state from checkpoint: step 16000, epoch 16000
+2026-01-19 00:59:20 - INFO - tridi.utils.training - Finished loading checkpoint
+2026-01-19 00:59:20 - INFO - tridi.data.hh_dataset - HHDataset chi3d: loading from ../chi3d/chi3d_overfit/chi3d_smplx/dataset_train_10fps.hdf5.
+2026-01-19 00:59:20 - WARNING - tridi.data.hh_dataset - [HHDataset chi3d] 372 sequences in split but NOT in hdf5. Examples: ['s02_Hug_3', 's02_Push_9', 's02_Kick_2', 's02_Hit_13', 's02_Handshake_9', 's02_Handshake_10', 's02_Push_16', 's02_Hit_5', 's02_Hit_8', 's02_Kick_14']
+2026-01-19 00:59:20 - INFO - tridi.data.hh_dataset - HH dataset chi3d train has 2 frames (skipped_missing_seq=372).
+2026-01-19 00:59:20 - INFO - tridi.data.hh_dataset - HHDataset chi3d: split=train #frames=2
+2026-01-19 00:59:20 - INFO - tridi.data.hh_dataset - HHDataset chi3d: loading from ../chi3d/chi3d_overfit/chi3d_smplx/dataset_test_10fps.hdf5.
+2026-01-19 00:59:20 - INFO - tridi.data.hh_dataset - HH dataset chi3d test has 2430 frames (skipped_missing_seq=0).
+2026-01-19 00:59:20 - INFO - tridi.data.hh_dataset - HHDataset chi3d: split=test #frames=2430
+2026-01-19 00:59:20 - INFO - tridi.data - Train data length: 2
+2026-01-19 00:59:20 - INFO - tridi.data - Val data length: 2430
+2026-01-19 00:59:21 - INFO - tridi.core.trainer - ***** Starting training *****
+    Dataset train size: 2
+    Dataset val size: 2_430
+    Dataloader train size: 1
+    Dataloader val size: 3
+    Batch size per device = 1024
+    Total train batch size (w. parallel, dist & accum) = 1024
+    Gradient Accumulation steps = 1
+    Max training steps = 300000
+    Training state = TrainState(epoch=16000, step=16000, initial_step=16000)
+2026-01-19 05:12:11 - INFO - tridi.core.trainer - Saved checkpoint to /usr/prakt/w0012/HH_gen/experiments/005_chi3d_overfit_aug/checkpoints/checkpoint-step-0018000.pth
+[2026-01-19T08:58:29.229] error: *** JOB 1482046 ON node8 CANCELLED AT 2026-01-19T08:58:29 DUE TO TIME LIMIT ***
