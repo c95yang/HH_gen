@@ -1,8 +1,8 @@
 chi3d:
   root: /media/uv/Data/workspace/HH_gen/tridi/data/preprocessed/chi3d_smplx
   downsample_factor: 1
-  fps_train: 10
-  fps_eval: 10
+  fps_train: 25
+  fps_eval: 25
   augment_rotation: false
   augment_symmetry: false
 
@@ -29,7 +29,7 @@ run:
   datasets:
   - chi3d
 dataloader:
-  batch_size: 2048
+  batch_size: 1024
   workers: 12
   sampler: weighted
 train:

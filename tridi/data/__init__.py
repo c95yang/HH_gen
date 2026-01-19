@@ -60,7 +60,7 @@ def get_train_dataloader(cfg: ProjectConfig):
             root=Path(dataset_config.root),
             split=val_split,  # chi3d=val，其它=test
             downsample_factor=dataset_config.downsample_factor,
-            subjects=getattr(dataset_config, "val_subjects", []),
+            subjects=getattr(dataset_config, f"{val_split}_subjects", None),
             assets_folder=Path(cfg.env.assets_folder),
             fps=dataset_config.fps_eval,
             max_timestamps=getattr(dataset_config, "max_timestamps", None),
@@ -124,59 +124,52 @@ def get_train_dataloader(cfg: ProjectConfig):
 
 
 def get_eval_dataloader(cfg: ProjectConfig):
-    # list of all used datasets
     datasets = []
 
-    # create datasets
+    if cfg.run.job == "sample":
+        split = getattr(cfg.sample, "split", "test")
+    else:  # run.job == "eval"
+        split = getattr(cfg.eval, "split", "test")
+
     for dataset_name in cfg.run.datasets:
-        if dataset_name == 'behave':
-            dataset_config = cfg.behave
-            dataset_kwargs = {
-                "split_file": cfg.behave.test_split_file,
-            }
-        elif dataset_name == "embody3d":
-            dataset_config = cfg.embody3d
-            dataset_kwargs = {
-                "split_file": cfg.embody3d.test_split_file,
-            }
-        elif dataset_name == "interhuman":
-            dataset_config = cfg.interhuman
-            dataset_kwargs = {
-                "split_file": cfg.interhuman.test_split_file,
-            }
-        elif dataset_name == "chi3d":
+        if dataset_name == "chi3d":
             dataset_config = cfg.chi3d
-            dataset_kwargs = {
-                "split_file": cfg.chi3d.test_split_file,
-            }
+
+            # auto choose chi3d_train/val/test.json
+            split_file = getattr(dataset_config, f"{split}_split_file")
+
+            dataset = HHDataset(
+                name=dataset_config.name,
+                root=Path(dataset_config.root),
+                split=split,                       # <-- open dataset_{split}_{fps}fps.hdf5
+                downsample_factor=1,
+                subjects=getattr(dataset_config, f"{split}_subjects", None),
+                assets_folder=Path(cfg.env.assets_folder),
+                fps=dataset_config.fps_eval,
+                max_timestamps=dataset_config.max_timestamps,
+                filter_subjects=dataset_config.filter_subjects,
+                split_file=split_file,
+            )
+
         else:
-            raise NotImplementedError(f'Unknown dataset: {dataset_name}')
+            # only chi3d
+            raise NotImplementedError(f"Only chi3d is supported in your current setup, got: {dataset_name}")
 
-        dataset = HHDataset(
-            name=dataset_config.name,
-            root=Path(dataset_config.root),
-            split='test',
-            downsample_factor=1,
-            subjects=dataset_config.test_subjects,
-            assets_folder=Path(cfg.env.assets_folder),
-            fps=dataset_config.fps_eval,
-            max_timestamps=dataset_config.max_timestamps,
-            filter_subjects=dataset_config.filter_subjects,
-            **dataset_kwargs
-        )
-
-        # accumulate datasets
         datasets.append(dataset)
 
-    # create dataloaders
     dataloaders = []
     for dataset in datasets:
         dataloader = torch.utils.data.DataLoader(
-            dataset, batch_size=cfg.dataloader.batch_size, num_workers=cfg.dataloader.workers,
-            shuffle=False, pin_memory=True, collate_fn=HHBatchData.collate
+            dataset,
+            batch_size=cfg.dataloader.batch_size,
+            num_workers=cfg.dataloader.workers,
+            shuffle=False,
+            drop_last=False,
+            pin_memory=True,
+            collate_fn=HHBatchData.collate,
+            persistent_workers=False,
         )
-
         dataloaders.append(dataloader)
-        logger.info(f"Eval data length for {dataset.name}: {len(dataset)}")
+        logger.info(f"Eval data length for {dataset.name} ({split}): {len(dataset)}")
 
     return dataloaders
