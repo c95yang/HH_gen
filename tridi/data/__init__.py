@@ -55,7 +55,7 @@ def get_train_dataloader(cfg: ProjectConfig):
             max_timestamps=getattr(dataset_config, "max_timestamps", None),
             filter_subjects=getattr(dataset_config, "filter_subjects", None),
             **train_kwargs
-        )     
+        )
 
         val_dataset = HHDataset(
             name=dataset_config.name,
@@ -70,13 +70,9 @@ def get_train_dataloader(cfg: ProjectConfig):
             **val_kwargs
         )
 
-        # accumulate datasets
-        # canonical_obj_meshes.update(train_dataset.canonical_obj_meshes)
-        # canonical_obj_keypoints.update(train_dataset.canonical_obj_keypoints)
         train_datasets.append(train_dataset)
         val_datasets.append(val_dataset)
 
-    # concatenate datasets
     train_dataset = torch.utils.data.ConcatDataset(train_datasets)
     val_dataset = torch.utils.data.ConcatDataset(val_datasets)
 
@@ -122,11 +118,11 @@ def get_train_dataloader(cfg: ProjectConfig):
         collate_fn=HHBatchData.collate,
         persistent_workers=False,
     )
+
     logger.info(f"Train data length: {len(train_dataset)}")
     logger.info(f"Val data length: {len(val_dataset)}")
-
-    # return train_dataloader, val_dataloader, canonical_obj_meshes, canonical_obj_keypoints
     return train_dataloader, val_dataloader
+
 
 
 def get_eval_dataloader(cfg: ProjectConfig):

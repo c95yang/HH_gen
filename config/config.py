@@ -89,7 +89,7 @@ class LoggingConfig:
     wandb_entity: str = 'yaoweiwang-technical-university-of-munich'
 
     # wandb_project: str = 'hhgen'
-    # wandb_entity: str = 'selin'
+    # wandb_entity: str = 'selin_'
 
     #wandb_project: str = 'HH-Gen'
     #wandb_entity: str = 'c-yang'

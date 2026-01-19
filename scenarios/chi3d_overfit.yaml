@@ -57,6 +57,6 @@ scheduler:
   name: cosine
   kwargs:
     num_warmup_steps: 5000
-    num_training_steps: 50000
+    num_training_steps: 100000
 #python main.py -c config/env.yaml scenarios/chi3d.yaml -- run.name=chi3d2 run.job=train
 

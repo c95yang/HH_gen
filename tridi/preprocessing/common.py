@@ -161,7 +161,7 @@ def get_sequences_list(dataset, input_path, subjects=None, objects=None):
     return all_seqs
 
 
-def add_meatada_to_hdf5(seq_group, sbj, T, gender=""):
+def add_meatada_to_hdf5(seq_group, sbj, T, sbj_gender="", second_sbj_gender=""):
     seq_group.attrs['sbj'] = sbj
     seq_group.attrs['T'] = T
     seq_group.attrs['gender'] = gender
