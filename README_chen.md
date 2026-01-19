@@ -1,8 +1,8 @@
 ## Training
 
 ```bash
-python main.py -c config/env.yaml scenarios/chi3d_overfit.yaml -- \
-  run.name=004_chi3d_overfit run.job=train
+python main.py -c config/env.yaml scenarios/chi3d.yaml -- \
+  run.name=chi3d run.job=train
 ```
 
 ## Sample

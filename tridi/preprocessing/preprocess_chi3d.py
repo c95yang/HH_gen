@@ -26,6 +26,8 @@ def split(cfg):
     chi3d_path = Path(cfg.chi3d.root)
     assets_path = Path(cfg.chi3d.assets)
 
+    assets_path.mkdir(exist_ok=True, parents=True)
+
     val_train = []
     train = []
     val = []
