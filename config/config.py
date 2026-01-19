@@ -101,7 +101,7 @@ class SampleConfig:
     # Inference
     num_inference_steps: int = 1000
     c: Optional[str] = 'ddpm_guided'
-
+    split: str = "test"   # train / val / test
     mode: str = "11"  # ('sbj', 'second_sbj')
     contacts_mode: str = 'heatmap'  # 'heatmap', 'clip'
 
@@ -120,6 +120,7 @@ class EvalConfig:
     use_rec_metrics: bool = True
     samples_folder: Optional[str] = None
     sampling_target: List[str] = field(default_factory=lambda: [])
+    split: str = "test"   # train / val / test
 
 # ============================================================
 

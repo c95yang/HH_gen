@@ -26,7 +26,7 @@ class H5DataSample(NamedTuple):
 class HHDataset:
     name: str # 'behave', 'embody3d', 'interhuman', 'chi3d'
     root: Path
-    split: str # 'train', 'test'
+    split: str  # 'train', 'val', 'test'
     downsample_factor: int = 1
     h5dataset_path: Path = None
     preload_data: bool = True
@@ -38,9 +38,8 @@ class HHDataset:
     include_pointnext: bool = False
     assets_folder: Optional[Path] = None
     fps: Optional[int] = 30
-    max_timestamps: Optional[int] = None  # 限制每个序列的最大timestamp数量
+    max_timestamps: Optional[int] = None  # limit the maximum number of timestamps per sequence.
     filter_subjects: Optional[List[str]] = None  # only load the specified subjects
-
 
     def __post_init__(self) -> None:
         # Open h5 dataset
@@ -195,9 +194,6 @@ class HHDataset:
     def __getitem__(self, idx: int) -> HHBatchData:
         sample = self.data[idx] #H5DataSample(sequence='s02_Push_1', name='s02_Push_1', t_stamp=0)
         sequence = self.h5dataset[sample.sequence]
-
-        sbj_gender = sequence.attrs['gender']
-        second_sbj_gender = sequence.attrs['gender']
         
         # ==> augmentations
         sbj_smpl = {
@@ -242,13 +238,14 @@ class HHDataset:
             sequence['second_sbj_smpl_rh'][sample.t_stamp],
         ], axis=0).reshape((51, 3, 3))
 
-        # convert to 6d representation
         sbj_global = matrix_to_rotation_6d(sbj_smpl['global_orient'].reshape(3, 3)).reshape(-1)
         sbj_pose = matrix_to_rotation_6d(sbj_pose).reshape(-1)
-        # convert to 6d representation
+
         second_sbj_global = matrix_to_rotation_6d(second_sbj_smpl['global_orient'].reshape(3, 3)).reshape(-1)
         second_sbj_pose = matrix_to_rotation_6d(second_sbj_pose).reshape(-1)    
 
+        sbj_gender = sequence.attrs['sbj_gender']
+        second_sbj_gender = sequence.attrs['second_sbj_gender']
 
         # Fill BatchData isntance
         batch_data = HHBatchData(
@@ -265,13 +262,13 @@ class HHDataset:
             sbj_global=sbj_global,
             sbj_pose=sbj_pose,
             sbj_c=torch.tensor(sbj_smpl['transl'], dtype=torch.float),
-            sbj_gender=torch.tensor(sbj_gender == 'male', dtype=torch.bool),
+            sbj_gender=torch.tensor(sbj_gender == 'female', dtype=torch.bool),
             # second subject
             second_sbj_shape=torch.tensor(second_sbj_smpl['betas'], dtype=torch.float),
             second_sbj_global=second_sbj_global,
             second_sbj_pose=second_sbj_pose,
             second_sbj_c=torch.tensor(second_sbj_smpl['transl'], dtype=torch.float),
-            second_sbj_gender=torch.tensor(second_sbj_gender == 'male', dtype=torch.bool),
+            second_sbj_gender=torch.tensor(second_sbj_gender == 'female', dtype=torch.bool),
 
             scale=torch.tensor(sequence['prep_s'][sample.t_stamp], dtype=torch.float)
         )

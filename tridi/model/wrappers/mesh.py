@@ -86,7 +86,7 @@ class MeshModel:
 
     def get_meshes_th(
         self, output: TriDiModelOutput, scale=1.0,
-        sbj_gender=None, return_joints=False
+        sbj_gender=None, second_sbj_gender=None, return_joints=False
     ):
         B = min(self.batch_size, len(output))
 
@@ -120,7 +120,7 @@ class MeshModel:
             "right_hand_pose": second_sbj_pose[:, 21 + 15:]
         }
         # get second sbj mesh
-        second_sbj_vertices, second_sbj_joints = self.get_smpl_th_single(second_body_model_params, sbj_gender)
+        second_sbj_vertices, second_sbj_joints = self.get_smpl_th_single(second_body_model_params, second_sbj_gender)
 
 
         if return_joints:
@@ -130,7 +130,7 @@ class MeshModel:
 
     def get_meshes_wkpts_th(
         self, output: TriDiModelOutput, scale=1.0,
-        sbj_gender=None, return_joints=False
+        sbj_gender=None, second_sbj_gender= None, return_joints=False
     ):
         B = min(self.batch_size, len(output))
 
@@ -164,7 +164,7 @@ class MeshModel:
             "right_hand_pose": second_sbj_pose[:, 21 + 15:]
         }
         # get second sbj mesh
-        second_sbj_vertices, second_sbj_joints = self.get_smpl_th_single(second_body_model_params, sbj_gender)
+        second_sbj_vertices, second_sbj_joints = self.get_smpl_th_single(second_body_model_params,  second_sbj_gender)
 
         if return_joints:
             return sbj_vertices, sbj_joints, second_sbj_vertices, second_sbj_joints
@@ -187,8 +187,8 @@ class MeshModel:
         return self
 
     @torch.no_grad()
-    def get_meshes(self, output: TriDiModelOutput,scale=1.0, sbj_gender=None):
-        sbj_vertices, second_sbj_vertices = self.get_meshes_th(output, scale, sbj_gender)
+    def get_meshes(self, output: TriDiModelOutput,scale=1.0, sbj_gender=None, second_sbj_gender=None):
+        sbj_vertices, second_sbj_vertices = self.get_meshes_th(output, scale, sbj_gender, second_sbj_gender)
 
         # create subject mesh
         sbj_vertices = sbj_vertices.cpu().numpy()
@@ -202,13 +202,14 @@ class MeshModel:
 
         return sbj_meshes, second_sbj_meshes
 
-    def get_smpl_th(self, params: Union[Dict, HHBatchData], sbj_gender=None):
+    def get_smpl_th(self, params: Union[Dict, HHBatchData], sbj_gender=None, second_sbj_gender=None):
         if not isinstance(params, HHBatchData):
             raise ValueError("params must be an instance of HHBatchData")
 
         #print("Getting SMPL from HHBatchData", params.to_string())
         B = len(params['sbj_shape'])
         sbj_gender = params.sbj_gender
+        second_sbj_gender = params.second_sbj_gender
 
         sbj_pose = params['sbj_pose'].reshape(B, -1, 6)
         sbj_pose = rotation_6d_to_matrix(sbj_pose).reshape(B, -1, 9).float()
@@ -244,16 +245,71 @@ class MeshModel:
 
         # default to male
         # get smpl(-h) vertices
-        sbj_output = self.smpl_m(pose2rot=False, get_skin=True, return_full_pose=True, **body_model_params)
-        sbj_vertices = sbj_output.vertices
-        sbj_joints   = sbj_output.joints
+
+        # gender:True-->female, False-->male/neutral
+
+        vert = self.smpl_m.get_num_verts()
+
+        # allocate outputs
+        sbj_vertices = torch.zeros((B,vert,3), device=self.device)
+        sbj_joints = torch.zeros ((B,127,3), device=self.device)
+
+        second_sbj_vertices = torch.zeros((B,vert,3), device=self.device)
+        second_sbj_joints = torch.zeros ((B,127,3), device=self.device)
+
+        # masks for gender
+        
+
+        if sbj_gender is None:
+            
+            sbj_gender = torch.zeros((B,), dtype=torch.bool, device=self.device)
+        else:
+            if not torch.is_tensor(sbj_gender):
+                sbj_gender = torch.tensor(sbj_gender, dtype=torch.bool, device=self.device)
+            sbj_gender = sbj_gender.to(self.device).view(-1).bool()
+            if sbj_gender.numel() == 1:
+                sbj_gender = sbj_gender.expand(B)
+            else:
+                sbj_gender = sbj_gender[:B]
+
+        sbj_f_mask = sbj_gender.bool()
+        sbj_m_mask = sbj_f_mask.logical_not()
+
+        second_sbj_f_mask = second_sbj_gender.bool()
+        second_sbj_m_mask = second_sbj_f_mask.logical_not()
+
+        # first subject
+
+        if sbj_f_mask.any() : #female
+            params_f = { k: v[sbj_f_mask] for k, v in body_model_params.items() }
+
+            sbj_output = self.smpl_f(pose2rot=False, get_skin=True, return_full_pose=True, **params_f)
+            sbj_vertices[sbj_f_mask] = sbj_output.vertices
+            sbj_joints[sbj_f_mask]   = sbj_output.joints
+
+        if sbj_m_mask.any() : # male/neutral set to male 
+            params_m = { k: v[sbj_m_mask] for k, v in body_model_params.items() }
 
 
-        second_sbj_output = self.smpl_m(
-            pose2rot=False, get_skin=True, return_full_pose=True, **second_body_model_params
-        )
-        second_sbj_vertices = second_sbj_output.vertices
-        second_sbj_joints = second_sbj_output.joints
+            sbj_output = self.smpl_m(pose2rot=False, get_skin=True, return_full_pose=True, **params_m)
+            sbj_vertices[sbj_m_mask] = sbj_output.vertices
+            sbj_joints[sbj_m_mask]   = sbj_output.joints
+
+
+        # second subject
+        if second_sbj_f_mask.any() : #female
+            second_params_f = { k: v[second_sbj_f_mask] for k, v in second_body_model_params.items() }
+
+            second_sbj_output = self.smpl_f(pose2rot=False, get_skin=True, return_full_pose=True, **second_params_f)
+            second_sbj_vertices[second_sbj_f_mask] = second_sbj_output.vertices
+            second_sbj_joints[second_sbj_f_mask]   = second_sbj_output.joints
+
+        if second_sbj_m_mask.any() : # male/neutral set to male 
+            second_params_m = { k: v[second_sbj_m_mask] for k, v in second_body_model_params.items() }
+
+            second_sbj_output = self.smpl_m(pose2rot=False, get_skin=True, return_full_pose=True, **second_params_m)
+            second_sbj_vertices[second_sbj_m_mask] = second_sbj_output.vertices
+            second_sbj_joints[second_sbj_m_mask]   = second_sbj_output.joints
 
         return sbj_vertices, sbj_joints, second_sbj_vertices, second_sbj_joints
     
@@ -262,18 +318,40 @@ class MeshModel:
         body_model_params = {k: v.to(self.device) for k, v in body_model_params.items()}
         # for k, v in body_model_params.items():
         #     print(f"  {k}: {v.shape}")
+        
+        # gender:True-->female, False-->male/neutral
+
+        vert = self.smpl_m.get_num_verts()
+
+        # allocate outputs
+        sbj_vertices = torch.zeros((B,vert,3), device=self.device)
+        sbj_joints = torch.zeros ((B,127,3), device=self.device)
+        # masks for gender
+        sbj_f_mask = sbj_gender.bool()
+        sbj_m_mask = sbj_f_mask.logical_not()
 
         # default to male
         # get smpl(-h) vertices
-        sbj_output = self.smpl_m(pose2rot=False, get_skin=True, return_full_pose=True, **body_model_params)
-        sbj_vertices = sbj_output.vertices
-        sbj_joints = sbj_output.joints
+        if sbj_f_mask.any() : #female
+            params_f = { k: v[sbj_f_mask] for k, v in body_model_params.items() }
+
+            sbj_output = self.smpl_f(pose2rot=False, get_skin=True, return_full_pose=True, **params_f)
+            sbj_vertices[sbj_f_mask] = sbj_output.vertices
+            sbj_joints[sbj_f_mask]   = sbj_output.joints
+
+        if sbj_m_mask.any() : # male/neutral set to male 
+            params_m = { k: v[sbj_m_mask] for k, v in body_model_params.items() }
+
+
+            sbj_output = self.smpl_m(pose2rot=False, get_skin=True, return_full_pose=True, **params_m)
+            sbj_vertices[sbj_m_mask] = sbj_output.vertices
+            sbj_joints[sbj_m_mask]   = sbj_output.joints
 
         return sbj_vertices, sbj_joints
 
     @torch.no_grad()
-    def get_smpl_np(self, body_model_params, sbj_gender=None):
-        sbj_vertices, sbj_joints = self.get_smpl_th(body_model_params, sbj_gender)
+    def get_smpl_np(self, body_model_params, sbj_gender=None, second_sbj_gender=None):
+        sbj_vertices, sbj_joints = self.get_smpl_th(body_model_params, sbj_gender, second_sbj_gender)
 
         return sbj_vertices.cpu().numpy(), sbj_joints.cpu().numpy()
 

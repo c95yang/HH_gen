@@ -114,6 +114,11 @@ class CHI3DConfig(DatasetConfig):
     train_split_file: Optional[str] = os.path.join("${env.assets_folder}", "chi3d_train.json")
 
     # One has to specify either subjects and actions or split_file
+    val_subjects: Optional[List[str]] = None
+    val_actions: Optional[List[str]] = None
+    val_split_file: Optional[str] = os.path.join("${env.assets_folder}", "chi3d_val.json")
+
+    # One has to specify either subjects and actions or split_file
     test_subjects: Optional[List[str]] = None
     test_actions: Optional[List[str]] = None
     test_split_file: Optional[str] = os.path.join("${env.assets_folder}", "chi3d_test.json")

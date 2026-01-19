@@ -71,7 +71,11 @@ class Trainer:
         #print("Aux output[3] shape:", aux_output[3].shape)
         output = self.model.split_output(aux_output[3], aux_output)
         sbj_vertices, sbj_joints, second_sbj_vertices, second_sbj_joints = self.mesh_model.get_meshes_wkpts_th(
-            output, return_joints=True
+            output,
+            scale=batch.scale,
+            sbj_gender=batch.sbj_gender,                  
+            second_sbj_gender=batch.second_sbj_gender,    
+            return_joints=True
         )
         output.sbj_vertices = sbj_vertices
         output.sbj_joints = sbj_joints
@@ -183,7 +187,7 @@ class Trainer:
                     wandb_log['lr'] = self.optimizer.param_groups[0]['lr']
                     wandb_log['step'] = self.train_state.step
                     wandb_log['relative_step'] = self.train_state.step - self.train_state.initial_step
-                    wandb.log(wandb_log)
+                    wandb.log(wandb_log, step=self.train_state.step)
 
                 # Save checkpoint
                 if (self.train_state.step % self.cfg.train.checkpoint_freq == 0):
@@ -196,8 +200,7 @@ class Trainer:
                     wandb.finish()
                     time.sleep(5)
                     return
-            
-            #print("VAL")
+            # print("VAL")
             self.model.eval()
             val_log, val_metrics, val_counters = defaultdict(float), defaultdict(float), defaultdict(int)
             for i, batch in enumerate(self.dataloader_val):
@@ -215,7 +218,7 @@ class Trainer:
                 val_log[f"VAL_{k}"] = val_metrics[k] / (val_counters[k] + 1e-4)
 
             if self.cfg.logging.wandb:
-                wandb.log(val_log)
+                wandb.log(val_log, step=self.train_state.step)
 
             # Epoch complete
             self.train_state.epoch += 1

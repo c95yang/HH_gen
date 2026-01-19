@@ -109,7 +109,7 @@ class Sampler:
 
                     # Convert output to meshes
                     sbj_meshes, second_sbj_meshes = self.mesh_model.get_meshes(
-                        output, batch.scale, batch.sbj_gender
+                        output, batch.scale, batch.sbj_gender, batch.second_sbj_gender
                     )
 
                     # Export meshes
@@ -242,12 +242,12 @@ class Sampler:
 
                     # Convert output to meshes
                     sbj_meshes, second_sbj_meshes = self.mesh_model.get_meshes(
-                        output, batch.scale, batch.sbj_gender
+                        output, batch.scale, batch.sbj_gender, batch.second_sbj_gender
                     )
 
                     # Get joints
                     _, sbj_joints, _, second_sbj_joints = self.mesh_model.get_meshes_wkpts_th(
-                        output, scale=batch.scale, sbj_gender=batch.sbj_gender, return_joints=True
+                        output, scale=batch.scale, sbj_gender=batch.sbj_gender, second_sbj_gender=batch.second_sbj_gender, return_joints=True
                     )
                     sbj_joints = sbj_joints.cpu().numpy()
                     second_sbj_joints = second_sbj_joints.cpu().numpy()
@@ -306,4 +306,3 @@ class Sampler:
             # Close hdf5 files
             for h5py_file in h5py_files:
                 h5py_file.close()
-
