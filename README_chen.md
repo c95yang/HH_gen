@@ -1,11 +1,10 @@
-## Training
-
+# Training
 ```bash
 python main.py -c config/env.yaml scenarios/chi3d.yaml -- \
   run.name=chi3d run.job=train
 ```
 
-## Sample
+# Sample
 
 MESHES
 ```bash
@@ -41,8 +40,7 @@ python main.py -c \
   sample.repetitions=3
 ```
 
-## Eval
-
+# Eval
 ```bash
 python main.py -c config/env.yaml \
   scenarios/chi3d.yaml -- \
@@ -55,10 +53,41 @@ python main.py -c config/env.yaml \
 ```
 
 
-## Prepocessing chi3d
+# Prepocessing chi3d
+
+Before running prepocesssing, put chi3d raw data in this folder structure
+```
+chi3d
+└── raw
+    ├── chi3d_info.json
+    ├── split.json
+    ├── test
+    └── train
+HH_gen
+└── ...
+```
 
 ```bash
 python -m tridi.preprocessing.preprocess_chi3d -c ./config/env.yaml -- chi3d.split="train" chi3d.root="../chi3d/raw" chi3d.assets="./data/preprocessed/chi3d_smplx" chi3d.downsample="25fps"
 python -m tridi.preprocessing.preprocess_chi3d -c ./config/env.yaml -- chi3d.split="val" chi3d.root="../chi3d/raw" chi3d.assets="./data/preprocessed/chi3d_smplx" chi3d.downsample="25fps"
 python -m tridi.preprocessing.preprocess_chi3d -c ./config/env.yaml -- chi3d.split="test" chi3d.root="../chi3d/raw" chi3d.assets="./data/preprocessed/chi3d_smplx" chi3d.downsample="25fps"
+```
+
+After prepocessing, data folder structure should like this.
+```
+HH_gen
+└── data
+    ├── preprocessed
+    │   └── chi3d_smplx
+    │       ├── chi3d_test.json
+    │       ├── chi3d_train.json
+    │       ├── chi3d_val.json
+    │       ├── dataset_test_25fps.hdf5
+    │       ├── dataset_train_25fps.hdf5
+    │       ├── dataset_val_25fps.hdf5
+    │       ├── preprocess_config_test_25fps.yaml
+    │       ├── preprocess_config_train_25fps.yaml
+    │       └── preprocess_config_val_25fps.yaml
+    └── smplx_models
+        ├── ...
 ```
