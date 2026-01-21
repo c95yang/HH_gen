@@ -121,6 +121,9 @@ class EvalConfig:
     samples_folder: Optional[str] = None
     sampling_target: List[str] = field(default_factory=lambda: [])
     split: str = "test"   # train / val / test
+    nn_baseline: bool = False
+    nn_baseline_k: int = 1
+    nn_baseline_ref_split: str = "train"
 
 # ============================================================
 
