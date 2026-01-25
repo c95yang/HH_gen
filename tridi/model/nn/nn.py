@@ -19,11 +19,11 @@ from tridi.model.nn.common import (
 class KnnWrapper:
     def __init__(
         self,
-        model_features="human", model_labels="object",
-        model_type="human_general", backend="faiss_cpu"
+        model_features, model_labels,
+        model_type, backend="faiss_cpu"
     ):
         assert model_features in [
-            "human_joints", "human_pose", "object_pose", "human_joints_object_pose"
+            "human_joints", "human_pose"
         ]
         assert model_labels in ["data_source", "object_pose", "human_parameters"]
         assert model_type in ["class_specific", "general"]
@@ -126,11 +126,9 @@ def create_nn_model(
     # <===
 
     # ===> 2. Get train / test sequences
-    # "dataset": List[(sbj, obj, act)]
+    # "dataset": List[(sbj, second_sbj)]
     train_sequences = get_sequences_for_nn(cfg, train_datasets, train_hdf5)
     test_sequences = get_sequences_for_nn(cfg, test_datasets, test_hdf5)
-
-    # <===
 
     # ===> 3. Load features
     if knn.model_type == 'general':
@@ -151,14 +149,14 @@ def create_nn_model(
 
 def create_nn_baseline(
     cfg: ProjectConfig,
-    model_type: str = 'class_specific',  # or 'general'
-    sample_target: str = "human",  # or "second_human"
+    model_type: str = 'general',
+    sample_target: str = "sbj",  # or "second_sbj"
     backend: str = 'faiss_gpu'
 ):
     # Initialize wrapper
     knn = KnnWrapper(
-        model_features="object_pose" if sample_target == 'human' else "human_joints",
-        model_labels="human_parameters" if sample_target == 'human' else "object_pose",
+        model_features="human_joints",
+        model_labels="human_parameters",
         model_type=model_type,
         backend=backend
     )

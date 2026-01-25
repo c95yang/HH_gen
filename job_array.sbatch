@@ -16,7 +16,9 @@ source ~/miniconda3/etc/profile.d/conda.sh
 conda activate tridi
 
 echo "JOB=$SLURM_JOB_ID ARRAY=$SLURM_ARRAY_TASK_ID HOST=$(hostname)"
+echo "CUDA_VISIBLE_DEVICES: $CUDA_VISIBLE_DEVICES"
 nvidia-smi
+
 
 if [ "$SLURM_ARRAY_TASK_ID" -eq 0 ]; then
   python main.py -c config/env.yaml scenarios/chi3d.yaml -- run.name=000_chi3d run.job=train

@@ -17,16 +17,8 @@ def sample_target_to_nn_feature(sample_target: str):
     Your evaluator passes: "sbj" / "second_sbj" (and maybe "obj" later).
     """
     # multi-human: both are human joints features
-    if sample_target in ["sbj", "second_sbj", "human"]:
+    if sample_target in ["sbj", "second_sbj"]:
         return "human_joints"
-
-    # optional: object branch (if you ever add it back)
-    if sample_target in ["obj", "object"]:
-        return "object_pose"
-
-    # optional combined mode
-    if "sbj_obj" in sample_target:
-        return "human_joints_object_pose"
 
     raise ValueError(f"Unknown sample_target: {sample_target}")
 
@@ -135,7 +127,7 @@ def nearest_neighbor_accuracy(
     cfg.sample.samples_file = samples_file
 
     knn = KnnWrapper(
-        model_features=sample_target_to_nn_feature(sample_target),
+        model_features=sample_target_to_nn_feature(sample_target), # "human_joints",
         model_labels="data_source",
         model_type="general",
         backend="faiss_cpu"

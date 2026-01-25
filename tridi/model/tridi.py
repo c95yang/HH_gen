@@ -10,6 +10,7 @@ from tqdm import tqdm
 
 from tridi.data.hh_batch_data import HHBatchData
 from .base import BaseTriDiModel, TriDiModelOutput
+import trimesh
 
 logger = getLogger(__name__)
 
@@ -119,10 +120,10 @@ class TriDiModel(BaseTriDiModel):
 
 
     def get_prediction_from_cg(
-        self, mode, pred, x_sbj_cond, x_second_sbj_cond, x_text_condition_cond, batch, t
+        self, mode, pred, x_sbj_cond, x_second_sbj_cond, batch, t
     ):
         device = self.device
-        D_sbj, D_second_sbj, D_text_condition = self.data_sbj_channels, self.data_second_sbj_channels, self.data_text_condition_channels
+        D_sbj, D_second_sbj = self.data_sbj_channels, self.data_second_sbj_channels
         # B = pred.shape[0]
 
         # Form output based on sampling mode
@@ -136,15 +137,24 @@ class TriDiModel(BaseTriDiModel):
         else:
             _second_sbj = x_second_sbj_cond
 
-        if mode[2] == "1": #text condition
-            _text_condition = pred[:, D_sbj + D_second_sbj:D_sbj + D_second_sbj + D_text_condition]
-        else:
-            _text_condition = x_text_condition_cond
-
-        _output = torch.cat([_sbj, _second_sbj, _text_condition], dim=1)
+        _output = torch.cat([_sbj, _second_sbj], dim=1)
 
         with torch.enable_grad():
             output = _output.clone().detach().requires_grad_(True)
+            # output.retain_grad()
+            split_output = self.split_output(output)
+            sbj_vertices, sbj_joints, second_sbj_vertices, second_sbj_joints = self.mesh_model.get_meshes_wkpts_th(
+                split_output,
+                scale=batch.scale,
+                sbj_gender=batch.sbj_gender,                  
+                second_sbj_gender=batch.second_sbj_gender,    
+                return_joints=True
+            )
+
+            #TODO: calculate sbj self penetration loss with kaolin
+
+            guidance_loss.backward()
+            torch.nn.utils.clip_grad_norm_(output, 50)
             _grad = -output.grad
 
         grad = []
@@ -152,8 +162,6 @@ class TriDiModel(BaseTriDiModel):
             grad.append(_grad[:, :D_sbj])
         if mode[1] == "1":
             grad.append(_grad[:, D_sbj:D_sbj + D_second_sbj])
-        if mode[2] == "1": #text condition
-            grad.append(_grad[:, D_sbj + D_second_sbj:D_sbj + D_second_sbj + D_text_condition])
 
         grad = torch.cat(grad, dim=1)
 
@@ -249,6 +257,11 @@ class TriDiModel(BaseTriDiModel):
 
             # Step
             t = t.item()
+            if self.cg_apply and t < self.cg_t_stamp:
+                guidance = self.get_prediction_from_cg(
+                    mode, _pred, x_sbj_cond, x_second_sbj_cond, None, batch, t
+                )
+                extra_step_kwargs["guidance"] = guidance
 
             # Select part of the output based on the sampling mode
             pred = []
