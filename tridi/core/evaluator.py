@@ -8,10 +8,7 @@ from typing import Any, Dict, List, Optional, Tuple
 import numpy as np
 import h5py
 
-try:
-    import faiss
-except Exception:
-    faiss = None
+import faiss
 
 from config.config import ProjectConfig
 from tridi.utils.metrics import generation
@@ -49,179 +46,6 @@ class Evaluator:
             return override
         # default: current run folder
         return Path(self.cfg.run.path) / "artifacts" / f"step_{self.cfg.resume.step}_samples"
-
-    def _save_tables(self, rows: List[Dict[str, Any]], out_dir: Path) -> None:
-        """
-        Writes:
-          - eval_metrics_long.csv  (merge + upsert if already exists)
-          - eval_metrics_wide.csv  (pivot from merged long)
-        """
-        out_dir.mkdir(parents=True, exist_ok=True)
-        long_path = out_dir / "eval_metrics_long.csv"
-
-        # (A) Load existing long csv if present
-        existing: List[Dict[str, str]] = []
-        if long_path.exists():
-            try:
-                with open(long_path, "r", newline="") as f:
-                    r = csv.DictReader(f)
-                    for row in r:
-                        existing.append(dict(row))
-            except Exception as e:
-                logger.warning(f"[Eval] Failed reading existing CSV ({long_path}): {e}")
-
-        # (B) Merge + upsert
-        # Key: (exp, step, phase, dataset, target, metric)
-        def make_key(d: Dict[str, Any]) -> Tuple[str, str, str, str, str, str]:
-            return (
-                str(d.get("exp", "")),
-                str(d.get("step", "")),
-                str(d.get("phase", "")),
-                str(d.get("dataset", "")),
-                str(d.get("target", "")),
-                str(d.get("metric", "")),
-            )
-
-        merged_map: Dict[Tuple[str, str, str, str, str, str], Dict[str, Any]] = {}
-        for r0 in existing:
-            merged_map[make_key(r0)] = r0
-        for r1 in rows:
-            merged_map[make_key(r1)] = r1  # newest wins
-
-        merged_rows = list(merged_map.values())
-        merged_rows.sort(key=lambda d: make_key(d))
-
-        # (C) Fieldnames = union of keys (stable order)
-        preferred = [
-            "exp", "step", "phase", "dataset", "target", "metric",
-            "value", "mean", "std", "mean_std", "raw_values"
-        ]
-        all_keys = set()
-        for r in merged_rows:
-            all_keys.update(r.keys())
-
-        fieldnames = [k for k in preferred if k in all_keys] + sorted([k for k in all_keys if k not in preferred])
-
-        # (D) Write merged long table (overwrite file, but content is merged)
-        with open(long_path, "w", newline="") as f:
-            w = csv.DictWriter(f, fieldnames=fieldnames)
-            w.writeheader()
-            for r in merged_rows:
-                out = {k: r.get(k, "") for k in fieldnames}
-                w.writerow(out)
-
-        logger.info(f"[Eval] Updated long table (merge+upsert): {long_path}")
-
-        # (E) Wide table (pivot from merged long)
-        grouped = defaultdict(dict)  # (exp,step,phase,dataset,target) -> {metric: value}
-        metric_cols = sorted({r.get("metric", "") for r in merged_rows if r.get("metric", "")})
-
-        for r in merged_rows:
-            key = (
-                r.get("exp", ""),
-                r.get("step", ""),
-                r.get("phase", ""),
-                r.get("dataset", ""),
-                r.get("target", ""),
-            )
-            m = r.get("metric", "")
-            if not m:
-                continue
-            val = r.get("mean_std", "")
-            if val is None or str(val).strip() == "":
-                val = r.get("value", "")
-
-            grouped[key][m] = val
-
-        wide_rows = []
-        for (exp, step, phase, dataset, target), mdict in grouped.items():
-            row = {"exp": exp, "step": step, "phase": phase, "dataset": dataset, "target": target}
-            for m in metric_cols:
-                row[m] = mdict.get(m, "")
-            wide_rows.append(row)
-
-        wide_path = out_dir / "eval_metrics_wide.csv"
-        with open(wide_path, "w", newline="") as f:
-            w = csv.DictWriter(f, fieldnames=["exp", "step", "phase", "dataset", "target"] + metric_cols)
-            w.writeheader()
-            w.writerows(wide_rows)
-
-        logger.info(f"[Eval] Updated wide table: {wide_path}")
-
-        # (F) Print readable table
-        if len(wide_rows) > 0:
-            headers = ["exp", "step", "phase", "dataset", "target"] + metric_cols
-            col_w = {h: len(h) for h in headers}
-            for r in wide_rows:
-                for h in headers:
-                    col_w[h] = max(col_w[h], len(str(r.get(h, ""))))
-
-            def fmt_row(rr):
-                return " | ".join(str(rr.get(h, "")).ljust(col_w[h]) for h in headers)
-
-            sep = "-+-".join("-" * col_w[h] for h in headers)
-            logger.info("[Eval] Summary table (wide):")
-            print(fmt_row({h: h for h in headers}))
-            print(sep)
-            for r in wide_rows:
-                print(fmt_row(r))
-        # (G) Paper-like table: rows=method, cols=target_metric
-        metric_order = ["1-NNA", "COV", "MMD", "SD", "MPJPE", "MPJPE_PA"]
-        targets = sorted({r.get("target", "") for r in merged_rows if r.get("target", "")})
-
-        def pick_val(r):
-            v = r.get("mean_std", "")
-            if v is None or str(v).strip() == "":
-                v = r.get("value", "")
-            return "" if v is None else str(v)
-
-        def parse_method_and_metric(r):
-            target = r.get("target", "")
-            metric = r.get("metric", "")
-            if not target or not metric:
-                return None, None, None
-
-            method = "TriDi"
-            base_metric = metric
-
-            if metric.startswith("NNBASE_"):
-                method = "NNBASE"
-                base_metric = metric[len("NNBASE_"):]
-            else:
-                # rec metrics are like "sbj_MPJPE", "second_sbj_MPJPE_PA"
-                prefix = f"{target}_"
-                if metric.startswith(prefix):
-                    base_metric = metric[len(prefix):]
-
-            return method, target, base_metric
-
-        paper_map = defaultdict(dict)  # (exp,step,dataset,method) -> {target_metric: val}
-
-        for r in merged_rows:
-            method, target, base_metric = parse_method_and_metric(r)
-            if method is None:
-                continue
-            if base_metric not in metric_order:
-                continue
-            key = (r.get("exp", ""), r.get("step", ""), r.get("dataset", ""), method)
-            paper_map[key][f"{target}_{base_metric}"] = pick_val(r)
-
-        paper_rows = []
-        for (exp, step, dataset, method), mdict in sorted(paper_map.items()):
-            row = {"exp": exp, "step": step, "dataset": dataset, "method": method}
-            for t in targets:
-                for m in metric_order:
-                    row[f"{t}_{m}"] = mdict.get(f"{t}_{m}", "")
-            paper_rows.append(row)
-
-        paper_cols = ["exp", "step", "dataset", "method"] + [f"{t}_{m}" for t in targets for m in metric_order]
-        paper_path = out_dir / "eval_metrics_paper.csv"
-        with open(paper_path, "w", newline="") as f:
-            w = csv.DictWriter(f, fieldnames=paper_cols)
-            w.writeheader()
-            w.writerows(paper_rows)
-
-        logger.info(f"[Eval] Wrote paper-like table: {paper_path}")
 
         # -------------------------
     # NN baseline helpers
@@ -314,11 +138,12 @@ class Evaluator:
         dist, idx = index.search(query_feats, k)
         return dist, idx
 
-    def _mpjpe(self, pred: np.ndarray, gt: np.ndarray) -> float:
+    def _mpjpe(self, pred: np.ndarray, gt: np.ndarray):
         # pred/gt: (N, J, 3)
-        return float(np.mean(np.linalg.norm(pred - gt, axis=-1)))
+        mean = float(np.mean(np.linalg.norm(pred - gt, axis=-1)))
+        return mean
 
-    def _pa_mpjpe(self, pred: np.ndarray, gt: np.ndarray) -> float:
+    def _pa_mpjpe(self, pred: np.ndarray, gt: np.ndarray):
         """
         Procrustes aligned MPJPE (scale+R+t), per-sample, then mean.
         pred/gt: (N, J, 3)
@@ -357,7 +182,9 @@ class Evaluator:
             err = np.mean(np.linalg.norm(X_aligned - Y, axis=-1))
             errs.append(err)
 
-        return float(np.mean(errs))
+        mean = float(np.mean(errs))
+
+        return mean
 
     def _compute_1nna(self, A: np.ndarray, B: np.ndarray) -> float:
         """
@@ -462,7 +289,7 @@ class Evaluator:
 
                 
                     for k, v in metrics.items():
-                        print(f"\t\t{k}: {v}")
+                        # print(f"\t\t{k}: {v}")
                         val = np.mean(np.min(np.stack(v, 1), axis=1))*100
                         logger.info(f"\t\t{k:<20s}: {val:.1f}")
 
@@ -529,61 +356,63 @@ class Evaluator:
                     # ===== gen-like metrics for baseline =====
                     # MMD: mean NN distance (note: dist is squared L2 for IndexFlatL2)
                     
-                    mmd = float(np.mean(np.sqrt(nn_dist)))
+                    mmd_mean = float(np.mean(np.sqrt(nn_dist)))
+                    mmd_std = float(np.std(np.sqrt(nn_dist)))
+
 
                     cov = float(len(np.unique(nn_idx)) / len(ref_feats))  # coverage over ref set
 
                     nna = self._compute_1nna(q_feats, ref_feats[nn_idx])  # test vs retrieved
 
                     # SD for baseline: avoid self-match=0 by querying baseline points into ref and taking k=2
-                    sd = 0.0
                     if len(ref_feats) > 1:
                         dist2, idx2 = self._faiss_knn(ref_feats, ref_feats[nn_idx], k=2)
-                        sd = float(np.mean(np.sqrt(dist2[:, 1])))
+                        sd_mean = float(np.mean(np.sqrt(dist2[:, 1])))
+                        sd_std = float(np.std(np.sqrt(dist2[:, 1])))
 
-                    logger.info(f"\t\tNNBASE 1-NNA - {sample_target}: {nna*100:.2f}")
-                    logger.info(f"\t\tNNBASE COV   - {sample_target}: {cov*100:.2f}")
-                    logger.info(f"\t\tNNBASE MMD   - {sample_target}: {mmd:.4f}")
-                    logger.info(f"\t\tNNBASE SD    - {sample_target}: {sd:.4f}")
+                    logger.info(f"\t\t1-NNA - {sample_target}: {nna*100:.2f}")
+                    logger.info(f"\t\tCOV   - {sample_target}: {cov*100:.2f}")
+                    logger.info(f"\t\tMMD   - {sample_target}: {mmd_mean:.2f} ± {mmd_std:.2f}")
+                    logger.info(f"\t\tSD    - {sample_target}: {sd_mean:.2f} ± {sd_std:.2f}")
 
                     rows.append({
                         "exp": exp_name, "step": step_str, "phase": "nn",
                         "dataset": dataset, "target": sample_target,
-                        "metric": "NNBASE_1-NNA", "mean_std": f"{nna*100:.2f} ± 0.00"
+                        "metric": "1-NNA", "value": f"{nna*100:.2f}"
                     })
                     rows.append({
                         "exp": exp_name, "step": step_str, "phase": "nn",
                         "dataset": dataset, "target": sample_target,
-                        "metric": "NNBASE_COV", "mean_std": f"{cov*100:.2f} ± 0.00"
+                        "metric": "COV", "value": f"{cov*100:.2f}"
                     })
                     rows.append({
                         "exp": exp_name, "step": step_str, "phase": "nn",
                         "dataset": dataset, "target": sample_target,
-                        "metric": "NNBASE_MMD", "mean_std": f"{mmd:.4f} ± 0.0000"
+                        "metric": "MMD", "mean_std": f"{mmd_mean:.2f} ± {mmd_std:.2f}"
                     })
                     rows.append({
                         "exp": exp_name, "step": step_str, "phase": "nn",
                         "dataset": dataset, "target": sample_target,
-                        "metric": "NNBASE_SD", "mean_std": f"{sd:.4f} ± 0.0000"
+                        "metric": "SD", "mean_std": f"{sd_mean:.2f} ± {sd_std:.2f}"
                     })
 
                     # ===== reconstruction baseline =====
                     pred_joints = ref_joints[nn_idx]  # (Nq, J, 3)
-                    mpjpe = self._mpjpe(pred_joints, q_joints) * 100.0      # to cm
+                    mpjpe = self._mpjpe(pred_joints, q_joints) * 100.0 
                     mpjpe_pa = self._pa_mpjpe(pred_joints, q_joints) * 100.0
 
-                    logger.info(f"\t\tNNBASE MPJPE     - {sample_target}: {mpjpe:.3f} cm")
-                    logger.info(f"\t\tNNBASE MPJPE_PA  - {sample_target}: {mpjpe_pa:.3f} cm")
+                    logger.info(f"\t\tMPJPE     - {sample_target}: {mpjpe:.2f}")
+                    logger.info(f"\t\tMPJPE_PA  - {sample_target}: {mpjpe_pa:.2f}")
 
                     rows.append({
                         "exp": exp_name, "step": step_str, "phase": "nn",
                         "dataset": dataset, "target": sample_target,
-                        "metric": "NNBASE_MPJPE", "value": f"{mpjpe:.3f}"
+                        "metric": "MPJPE", "value": f"{mpjpe:.2f}"
                     })
                     rows.append({
                         "exp": exp_name, "step": step_str, "phase": "nn",
                         "dataset": dataset, "target": sample_target,
-                        "metric": "NNBASE_MPJPE_PA", "value": f"{mpjpe_pa:.3f}"
+                        "metric": "MPJPE_PA", "value": f"{mpjpe_pa:.2f}"
                     })
 
         # =========================
@@ -591,3 +420,22 @@ class Evaluator:
         # =========================
         out_dir = base_samples_folder / "_eval"
         self._save_tables(rows, out_dir)
+
+    def _save_tables(self, rows: List[Dict[str, Any]], out_dir: Path):
+        # only save target,metric,value,mean_std, split sbj and second_sbj in two rows
+        out_dir.mkdir(parents=True, exist_ok=True)
+        csv_path = out_dir / "evaluation_results.csv"
+        with open(csv_path, "w", newline="") as csvfile:
+            fieldnames = ["method", "target", "metric", "value", "mean_std"]
+            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+            writer.writeheader()
+            for row in rows:
+                writer.writerow({
+                    "method": "HHgen" if row.get("phase", "") != "nn" else "NN",
+                    "target": row.get("target", ""),
+                    "metric": row.get("metric", ""),
+                    "value": row.get("value", ""),
+                    "mean_std": row.get("mean_std", ""),
+                })
+        logger.info(f"Saved evaluation results to {csv_path}")
+

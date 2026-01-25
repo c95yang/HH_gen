@@ -147,33 +147,22 @@ def get_sequences_from_split(
 # ---------------------------
 # Feature / label extraction
 # ---------------------------
-def _pick_human_keys(hdf5_sequence: h5py.Group, knn) -> Dict[str, str]:
+def _pick_human_keys(knn) -> Dict[str, str]:
     """
     Decide which human (sbj vs second_sbj) to read based on knn.sample_target.
     """
     sample_target = getattr(knn, "sample_target", "sbj")
-    prefix = "second_sbj_" if sample_target in ["second_sbj", "h2", "sbj2"] else "sbj_"
-
-    def _fallback(k: str, fb: str) -> str:
-        return k if k in hdf5_sequence else fb
+    prefix = "second_sbj_" if sample_target == "second_sbj" else "sbj_"
 
     keys = {}
-    keys["j"] = _fallback(prefix + "j", "sbj_j")
-    keys["global"] = _fallback(prefix + "smpl_global", "sbj_smpl_global")
-    keys["body"] = _fallback(prefix + "smpl_body", "sbj_smpl_body")
-    keys["lh"] = _fallback(prefix + "smpl_lh", "sbj_smpl_lh")
-    keys["rh"] = _fallback(prefix + "smpl_rh", "sbj_smpl_rh")
-    keys["transl"] = _fallback(prefix + "smpl_transl", "sbj_smpl_transl")
-    keys["betas"] = _fallback(prefix + "smpl_betas", "sbj_smpl_betas")
+    keys["j"] = prefix + "j"
+    keys["global"] = prefix + "smpl_global"
+    keys["body"] = prefix + "smpl_body"
+    keys["lh"] = prefix + "smpl_lh"
+    keys["rh"] = prefix + "smpl_rh"
+    keys["transl"] = prefix + "smpl_transl"
+    keys["betas"] = prefix + "smpl_betas"
     return keys
-
-
-def _ensure_2d(x: np.ndarray) -> np.ndarray:
-    x = np.asarray(x)
-    if x.ndim == 1:
-        return x.reshape(1, -1)
-    return x
-
 
 def get_data_for_sequence(
     knn,
@@ -217,7 +206,7 @@ def get_data_for_sequence(
 
     labels_list: List[np.ndarray] = []
 
-    human_keys = _pick_human_keys(hdf5_sequence, knn)
+    human_keys = _pick_human_keys(knn)
 
     # Allocate features
     if knn.model_features == "human_joints":
@@ -227,27 +216,8 @@ def get_data_for_sequence(
         feat_dim = (J - 1) * 3
         features = np.zeros((T, feat_dim), dtype=np.float32)
 
-    elif knn.model_features == "object_pose":
-        if ("obj_c" not in hdf5_sequence) or ("obj_R" not in hdf5_sequence):
-            raise KeyError(
-                f"Missing obj_c/obj_R in sequence {sequence}. "
-                f"Your dataset looks human-only; don't use model_features='object_pose'."
-            )
-        features = np.zeros((T, 12), dtype=np.float32)  # 9 + 3
-
     elif knn.model_features == "human_parameters":
         features = np.zeros((T, 52 * 3), dtype=np.float32)
-
-    elif knn.model_features == "human_joints_object_pose":
-        if human_keys["j"] not in hdf5_sequence:
-            raise KeyError(f"Missing joints dataset '{human_keys['j']}' in sequence group for {sbj}.")
-        if ("obj_c" not in hdf5_sequence) or ("obj_R" not in hdf5_sequence):
-            raise KeyError(
-                f"Missing obj_c/obj_R in sequence {sequence}. "
-                f"Don't use 'human_joints_object_pose' on human-only data."
-            )
-        J = int(hdf5_sequence[human_keys["j"]].shape[1])
-        features = np.zeros((T, (J - 1) * 3 + 12), dtype=np.float32)
 
     else:
         raise RuntimeError(f"Unknown model_features {knn.model_features}")
@@ -259,11 +229,6 @@ def get_data_for_sequence(
             sbj_j = np.asarray(hdf5_sequence[human_keys["j"]][t_stamp], dtype=np.float32)  # (J,3)
             sbj_j = sbj_j - sbj_j[[0]]  # center on root
             features[t] = sbj_j[1:].reshape(-1)
-
-        elif knn.model_features == "object_pose":
-            obj_c = np.asarray(hdf5_sequence["obj_c"][t_stamp], dtype=np.float32).reshape(3)
-            obj_R = np.asarray(hdf5_sequence["obj_R"][t_stamp], dtype=np.float32).reshape(9)
-            features[t] = np.concatenate([obj_R, obj_c], axis=0)
 
         elif knn.model_features == "human_parameters":
             # concat (1,9)+(21,9)+(15,9)+(15,9) => (52,9)
@@ -287,30 +252,10 @@ def get_data_for_sequence(
                 rotvec[i] = Rotation.from_matrix(pose_mat[i]).as_rotvec()
             features[t] = rotvec.reshape(-1)
 
-        elif knn.model_features == "human_joints_object_pose":
-            sbj_j = np.asarray(hdf5_sequence[human_keys["j"]][t_stamp], dtype=np.float32)
-            sbj_j = sbj_j - sbj_j[[0]]
-            obj_c = np.asarray(hdf5_sequence["obj_c"][t_stamp], dtype=np.float32).reshape(3)
-            obj_R = np.asarray(hdf5_sequence["obj_R"][t_stamp], dtype=np.float32).reshape(9)
-            obj_feature = np.concatenate([obj_R, obj_c], axis=0)
-            features[t] = np.concatenate([sbj_j[1:].reshape(-1), obj_feature], axis=0)
-
         # ---- labels ----
         if knn.model_labels == "data_source":
             label = np.array(int(dataset == "samples"), dtype=np.int32)
             labels_list.append(label)
-
-        elif knn.model_labels == "object_pose":
-            if ("obj_c" not in hdf5_sequence) or ("obj_R" not in hdf5_sequence):
-                raise KeyError(f"Missing obj_c/obj_R for labels in {sequence}")
-            obj_c = np.asarray(hdf5_sequence["obj_c"][t_stamp], dtype=np.float32).reshape(3)
-            obj_R = np.asarray(hdf5_sequence["obj_R"][t_stamp], dtype=np.float32).reshape(9)
-            label_parts = []
-            if knn.model_type == "general" and objname2classid is not None:
-                label_parts.append(np.array([class_id], dtype=np.float32))
-            label_parts.append(obj_R)
-            label_parts.append(obj_c)
-            labels_list.append(np.concatenate(label_parts, axis=0).astype(np.float32))
 
         elif knn.model_labels == "human_parameters":
             # betas + pose(52*9) + transl(3)

@@ -40,3 +40,7 @@ wandb: wandb.init() called while a run is active and reinit is set to 'default',
     Training state = TrainState(epoch=0, step=0, initial_step=0)
 log_dir: /usr/prakt/w0012/HH_gen/experiments/001_chi3d_aug
 cfg.resume.checkpoint: None
+2026-01-19 23:25:33 - INFO - tridi.core.trainer - Saved checkpoint to /usr/prakt/w0012/HH_gen/experiments/001_chi3d_aug/checkpoints/checkpoint-step-0005000.pth
+2026-01-20 01:30:48 - INFO - tridi.core.trainer - Saved checkpoint to /usr/prakt/w0012/HH_gen/experiments/001_chi3d_aug/checkpoints/checkpoint-step-0010000.pth
+2026-01-20 03:35:53 - INFO - tridi.core.trainer - Saved checkpoint to /usr/prakt/w0012/HH_gen/experiments/001_chi3d_aug/checkpoints/checkpoint-step-0015000.pth
+[2026-01-20T05:20:37.005] error: *** JOB 1482453 ON node8 CANCELLED AT 2026-01-20T05:20:37 DUE TO TIME LIMIT ***
