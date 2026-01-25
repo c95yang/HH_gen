@@ -5,8 +5,8 @@
 #SBATCH -c 4
 #SBATCH --mem=32G
 #SBATCH --gres=gpu:1
-#SBATCH -o %x-%j.out
-#SBATCH -e %x-%j.err
+#SBATCH -o logs/%x-%j.out
+#SBATCH -e logs/%x-%j.err
 #####SBATCH -w node4,node5,node8,node9,node10,node11,node12,node13,node14,node15,node16,node17,node18,node19,node20,node21
 #SBATCH -w node4,node5,node9,node11,node12,node13,node14,node15,node16,node17,node18,node19,node20,node21
 

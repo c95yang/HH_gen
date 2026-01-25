@@ -6,7 +6,8 @@
 #SBATCH -n 1
 #SBATCH -c 4
 #SBATCH --mem=32G
-#SBATCH -o output_%A_%a.txt
+#SBATCH -o logs/output_%A_%a.txt
+#SBATCH -e logs/error_%A_%a.txt
 #####SBATCH -w node4,node5,node8,node9,node10,node11,node12,node13,node14,node15,node16,node17,node18,node19,node20,node21
 #SBATCH -w node4,node5,node9,node11,node12,node13,node14,node15,node16,node17,node18,node19,node20,node21
 

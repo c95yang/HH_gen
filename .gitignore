@@ -24,6 +24,7 @@ visualization/
 
 # config files
 **/env.yaml
+/logs/
 
 #ignore all dataset
 /data/
