@@ -303,7 +303,7 @@ class TriDiModel(BaseTriDiModel):
 
     @staticmethod
     def split_output(x_0_pred, aux_output=None):
-        return TriDiModelOutput(
+        out = TriDiModelOutput(
             sbj_shape=x_0_pred[:, :10],
             sbj_global=x_0_pred[:, 10:16],
             sbj_pose=x_0_pred[:, 16:16 + 51 * 6],
@@ -315,6 +315,10 @@ class TriDiModel(BaseTriDiModel):
             timesteps_sbj=aux_output[4] if aux_output is not None else None,
             timesteps_second_sbj=aux_output[5] if aux_output is not None else None,
         )
+        # hard-zero translation
+        out.sbj_c = torch.zeros_like(out.sbj_c)
+        out.second_sbj_c = torch.zeros_like(out.second_sbj_c)
+        return out
 
     def set_mesh_model(self, mesh_model):
         self.mesh_model = mesh_model
