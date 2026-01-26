@@ -308,16 +308,27 @@ class TriDiModel(BaseTriDiModel):
             sbj_global=x_0_pred[:, 10:16],
             sbj_pose=x_0_pred[:, 16:16 + 51 * 6],
             sbj_c=x_0_pred[:, 16 + 51 * 6:16 + 51 * 6 + 3],
+            
             second_sbj_shape=x_0_pred[:, 325:325 + 10],
             second_sbj_global=x_0_pred[:, 325 + 10:325 + 16],
             second_sbj_pose=x_0_pred[:, 325 + 16:325 + 16 + 51 * 6],
             second_sbj_c=x_0_pred[:, 325 + 16 + 51 * 6:325 + 16 + 51 * 6 + 3],
+            
             timesteps_sbj=aux_output[4] if aux_output is not None else None,
             timesteps_second_sbj=aux_output[5] if aux_output is not None else None,
         )
         # hard-zero translation
         out.sbj_c = torch.zeros_like(out.sbj_c)
         out.second_sbj_c = torch.zeros_like(out.second_sbj_c)
+
+        # hard-fix global orientation to identity (6D)
+        B = out.sbj_global.shape[0]
+        device, dtype = out.sbj_global.device, out.sbj_global.dtype
+        I6 = torch.tensor([1, 0, 0, 0, 1, 0], device=device, dtype=dtype).view(1, 6).repeat(B, 1)
+
+        out.sbj_global = I6
+        out.second_sbj_global = I6
+        
         return out
 
     def set_mesh_model(self, mesh_model):
