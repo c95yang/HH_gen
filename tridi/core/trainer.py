@@ -58,7 +58,12 @@ class Trainer:
         # get gt sbj vertices and joints
         with torch.no_grad():
             # print("Getting batch GT: ", batch)
-            gt_sbj_vertices, gt_sbj_joints, gt_second_sbj_vertices, gt_second_sbj_joints = self.mesh_model.get_smpl_th(batch)
+            batch_nt = batch.to(device=batch.sbj_c.device)  
+            batch_nt.sbj_c = torch.zeros_like(batch.sbj_c)
+            batch_nt.second_sbj_c = torch.zeros_like(batch.second_sbj_c)
+
+            gt_sbj_vertices, gt_sbj_joints, gt_second_sbj_vertices, gt_second_sbj_joints = \
+                self.mesh_model.get_smpl_th(batch_nt)
             batch.sbj_vertices = gt_sbj_vertices
             batch.sbj_joints = gt_sbj_joints
             batch.second_sbj_vertices = gt_second_sbj_vertices
@@ -70,6 +75,11 @@ class Trainer:
         # aux output is (x_0, x_t, noise, x_0_pred)
         #print("Aux output[3] shape:", aux_output[3].shape)
         output = self.model.split_output(aux_output[3], aux_output)
+        
+        # set output transl=0
+        output.sbj_c = torch.zeros_like(output.sbj_c)
+        output.second_sbj_c = torch.zeros_like(output.second_sbj_c)
+
         sbj_vertices, sbj_joints, second_sbj_vertices, second_sbj_joints = self.mesh_model.get_meshes_wkpts_th(
             output,
             scale=batch.scale,
