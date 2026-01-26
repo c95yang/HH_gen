@@ -11,7 +11,7 @@ from .environment import EnvironmentConfig
 @dataclass
 class RunConfig:
     name: str = 'debug'
-    job: str = 'train'  # train, sample, eval
+    job: str = 'train'  # train, sample, eval, baseline
     cpu: bool = False
     seed: int = 42
     datasets: List[str] = field(default_factory=lambda: [])

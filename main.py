@@ -4,7 +4,7 @@ from config.config import ProjectConfig
 from tridi.core.evaluator import Evaluator
 from tridi.core.sampler import Sampler
 from tridi.core.trainer import Trainer
-from tridi.model import get_model
+from tridi.model import get_model, NearestNeighborBaselineModel
 from tridi.utils import training as training_utils
 from tridi.utils.exp import init_exp, init_wandb, init_logging, parse_arguments
 
@@ -33,7 +33,6 @@ def main():
 
         if cfg.run.job == 'train':
             trainer = Trainer(cfg, model)
-
             trainer.train()
         elif cfg.run.job == 'sample':
             sampler = Sampler(cfg, model)
@@ -43,6 +42,17 @@ def main():
                 sampler.sample_to_hdf5()
             else:
                 raise ValueError(f"Invalid target {cfg.sample.target}")
+    elif cfg.run.job == 'baseline_sample':
+        # Baseline as parallel method to TriDi
+        model = NearestNeighborBaselineModel(cfg)
+        sampler = Sampler(cfg, model)
+
+        if cfg.sample.target == 'meshes':
+            sampler.sample()
+        elif cfg.sample.target == 'hdf5':
+            sampler.sample_to_hdf5()
+        else:
+            raise ValueError(f"Invalid target {cfg.sample.target}")
     elif cfg.run.job == 'eval':
         evaluator = Evaluator(cfg)
         evaluator.evaluate()
