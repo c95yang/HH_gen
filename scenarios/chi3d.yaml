@@ -32,9 +32,9 @@ dataloader:
 train:
   mixed_precision: 'no'
   limit_train_batches: null
-  log_step_freq: 10
-  checkpoint_freq: 5000
-  max_steps: 300000
+  log_step_freq: 20
+  checkpoint_freq: 10000
+  max_steps: 100000
   limit_val_batches: null
   losses:
     denoise_1: 10.0
@@ -57,7 +57,7 @@ scheduler:
   type: transformers
   name: cosine
   kwargs:
-    num_warmup_steps: 5000
-    num_training_steps: 50000
-#python main.py -c config/env.yaml scenarios/chi3d.yaml -- run.name=chi3d2 run.job=train
+    num_warmup_steps: 15000
+    num_training_steps: 100000
+#python main.py -c config/env.yaml scenarios/chi3d.yaml -- run.name=chi3d run.job=train
 

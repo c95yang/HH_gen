@@ -45,8 +45,21 @@ python main.py -c \
 python main.py -c config/env.yaml \
   scenarios/chi3d.yaml -- \
   run.job=eval \
-  run.name=001_chi3d_aug \
-  resume.step=15000 \
+  run.name=008_chi3d  \
+  resume.step=5000 \
+  run.datasets=["chi3d"] \
+  eval.sampling_target=["sbj","second_sbj"] \
+  eval.use_gen_metrics=true eval.use_rec_metrics=true
+```
+
+with nn-baseline
+
+```bash
+python main.py -c config/env.yaml \
+  scenarios/chi3d.yaml -- \
+  run.job=eval \
+  run.name=018_chi3d \
+  resume.step=20000 \
   'run.datasets=["chi3d"]' \
   'eval.sampling_target=["sbj","second_sbj"]' \
   eval.use_gen_metrics=true eval.use_rec_metrics=true \
