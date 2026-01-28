@@ -6,6 +6,8 @@ import numpy as np
 import torch
 from sklearn.neighbors import NearestNeighbors
 from tqdm.autonotebook import tqdm
+from tridi.model.nn.common import canonicalize_pose_only_joints
+
 
 from config.config import ProjectConfig
 from tridi.model.nn.common import get_hdf5_files_for_nn, get_sequences_for_nn
@@ -92,25 +94,35 @@ def compute_similarity_transform(S1, S2):
 def align_to_root(joints, root_idx=0):
     return joints - joints[..., root_idx:root_idx + 1, :]
 
-
 def get_mpjpe(pred_joints, gt_joints):
-    # root aligned
-    pred_joints = align_to_root(pred_joints)
-    gt_joints = align_to_root(gt_joints)
-
-    mpjpe = np.sqrt(np.sum((gt_joints - pred_joints) ** 2, axis=-1))
-    return mpjpe.mean(-1)
-
+    pred = canonicalize_pose_only_joints(pred_joints)
+    gt   = canonicalize_pose_only_joints(gt_joints)
+    return np.linalg.norm(gt - pred, axis=-1).mean()
 
 def get_mpjpe_pa(pred_joints, gt_joints):
-    # root aligned
-    pred_joints = align_to_root(pred_joints)
-    gt_joints = align_to_root(gt_joints)
+    pred = canonicalize_pose_only_joints(pred_joints)
+    gt   = canonicalize_pose_only_joints(gt_joints)
+    pred_aligned = compute_similarity_transform(pred, gt)
+    return np.linalg.norm(gt - pred_aligned, axis=-1).mean()
 
-    # procrustes aligned
-    pred_joints = compute_similarity_transform(pred_joints, gt_joints)
-    mpjpe_pa = np.sqrt(np.sum((gt_joints - pred_joints) ** 2, axis=-1))
-    return mpjpe_pa.mean(-1)
+# def get_mpjpe(pred_joints, gt_joints):
+#     # root aligned
+#     pred_joints = align_to_root(pred_joints)
+#     gt_joints = align_to_root(gt_joints)
+
+#     mpjpe = np.sqrt(np.sum((gt_joints - pred_joints) ** 2, axis=-1))
+#     return mpjpe.mean(-1)
+
+
+# def get_mpjpe_pa(pred_joints, gt_joints):
+#     # root aligned
+#     pred_joints = align_to_root(pred_joints)
+#     gt_joints = align_to_root(gt_joints)
+
+#     # procrustes aligned
+#     pred_joints = compute_similarity_transform(pred_joints, gt_joints)
+#     mpjpe_pa = np.sqrt(np.sum((gt_joints - pred_joints) ** 2, axis=-1))
+#     return mpjpe_pa.mean(-1)
 
 
 @torch.no_grad()

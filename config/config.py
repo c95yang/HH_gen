@@ -124,7 +124,8 @@ class EvalConfig:
     nn_baseline: bool = False
     nn_baseline_k: int = 1
     nn_baseline_ref_split: str = "train"
-
+    pose_only: bool = False
+    method_name: Optional[str] = None
 # ============================================================
 
 @dataclass

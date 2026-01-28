@@ -64,6 +64,9 @@ def coverage(
     # <<< IMPORTANT: tell common.py which branch to read
     knn.sample_target = sample_target
 
+    #set pose only option
+    knn.pose_only = True
+
     train_datasets = [(reference_dataset, reference_set)]
     test_datasets = [("samples", "test")]
 
@@ -98,7 +101,7 @@ def minimum_matching_distance(
         backend="faiss_cpu"
     )
     knn.sample_target = sample_target
-
+    knn.pose_only = True
     train_datasets = [("samples", "test")]
     test_datasets = [(reference_dataset, reference_set)]
 
@@ -133,7 +136,7 @@ def nearest_neighbor_accuracy(
         backend="faiss_cpu"
     )
     knn.sample_target = sample_target
-
+    knn.pose_only = True
     train_datasets = [(d, compare_against) for d in datasets]
     test_datasets = [(d, compare_against) for d in datasets]
 
@@ -182,7 +185,7 @@ def sample_distance(
         backend="faiss_cpu"
     )
     knn.sample_target = sample_target
-
+    knn.pose_only = True
     train_datasets = [(reference_dataset, reference_set)]
     test_datasets = [("samples", "")]
 

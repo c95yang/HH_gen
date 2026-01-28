@@ -59,5 +59,14 @@ scheduler:
   kwargs:
     num_warmup_steps: 15000
     num_training_steps: 100000
+eval:
+  pose_only: true         
+  use_gen_metrics: true
+  use_rec_metrics: true
+  sampling_target: ["sbj", "second_sbj"]
+  nn_baseline: true
+  nn_baseline_k: 1
+  nn_baseline_ref_split: "train"
+  
 #python main.py -c config/env.yaml scenarios/chi3d.yaml -- run.name=chi3d run.job=train
 

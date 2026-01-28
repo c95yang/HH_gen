@@ -1,12 +1,26 @@
 import torch
+from tridi.model import get_model as get_diffusion_model
+from tridi.model.nn_baseline import NNBaselineModel, is_nn_baseline_checkpoint
+
 
 from config.config import ProjectConfig
 from tridi.core.evaluator import Evaluator
 from tridi.core.sampler import Sampler
 from tridi.core.trainer import Trainer
-from tridi.model import get_model
+#from tridi.model import get_model
 from tridi.utils import training as training_utils
 from tridi.utils.exp import init_exp, init_wandb, init_logging, parse_arguments
+
+def get_model_for_sample(cfg: ProjectConfig):
+    ckpt_path = getattr(cfg.resume, "checkpoint", None)
+    if ckpt_path:
+        ckpt = torch.load(ckpt_path, map_location="cpu")
+        if is_nn_baseline_checkpoint(ckpt):
+            #  baseline: 
+            return NNBaselineModel(cfg, checkpoint_path=ckpt_path)
+
+    #  default: diffusion
+    return get_diffusion_model(cfg)
 
 
 def main():
@@ -28,8 +42,11 @@ def main():
     training_utils.set_seed(cfg.run.seed)
 
     if cfg.run.job in ['train', 'sample']:
-        # Model
-        model = get_model(cfg)
+        if cfg.run.job == 'train':
+            model = get_diffusion_model(cfg)          # train always be diffusion
+        else:
+            model = get_model_for_sample(cfg)         # sample will choose automatically according to checkpoint 
+
 
         if cfg.run.job == 'train':
             trainer = Trainer(cfg, model)

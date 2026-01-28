@@ -32,7 +32,11 @@ class Sampler:
         self.model = model.to(self.device)
 
         # Resume from checkpoint and create the initial training state
-        self.train_state: TrainState = resume_from_checkpoint(cfg, model, None, None)
+        if getattr(self.model, "is_nn_baseline", False):
+            self.train_state = None
+        else:
+            self.train_state: TrainState = resume_from_checkpoint(cfg, model, None, None)
+
 
         # Get dataloaders
         self.dataloaders = get_eval_dataloader(cfg)
@@ -91,6 +95,8 @@ class Sampler:
         )
 
         for dataloader in self.dataloaders:
+            if hasattr(self.model, "set_current_dataset"):
+                self.model.set_current_dataset(dataloader.dataset.name)
             # Log info
             logger.info(
                 f'    Sampling mode {self.cfg.sample.mode} for: {dataloader.dataset.name}\n'
@@ -153,6 +159,8 @@ class Sampler:
         )
 
         for dataloader in self.dataloaders:
+            if hasattr(self.model, "set_current_dataset"):
+                self.model.set_current_dataset(dataloader.dataset.name)
             # Log info
             logger.info(
                 f'    Sampling mode {self.cfg.sample.mode} for: {dataloader.dataset.name}\n'

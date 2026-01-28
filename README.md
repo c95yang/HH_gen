@@ -3,6 +3,20 @@
 python main.py -c config/env.yaml scenarios/chi3d.yaml -- \
   run.name=chi3d run.job=train
 ```
+# Prepare a baseline checkpoint
+```bash
+python - <<'PY'
+from tridi.model.nn_baseline import create_nn_baseline_checkpoint
+create_nn_baseline_checkpoint(
+    "experiments/nn_baseline/checkpoints/checkpoint-step-0000000.pth",
+    ref_split="train",
+    top_k=1,     # diversity：>1；normally 1
+    feature="pose6",
+)
+print("done")
+PY
+
+```
 
 # Sample
 
@@ -40,6 +54,19 @@ python main.py -c \
   sample.repetitions=3
 ```
 
+```bash
+python main.py -c config/env.yaml scenarios/chi3d.yaml -- \
+  run.job=sample \
+  run.name=020_nn_000_chi3d \
+  sample.target=hdf5 \
+  resume.checkpoint="experiments/nn_baseline/checkpoints/checkpoint-step-0000000.pth" \
+  resume.step=0 \
+  dataloader.batch_size=4096 \
+  sample.mode=sample_10 \
+  run.datasets='[chi3d]' \
+  sample.dataset=normal \
+  sample.repetitions=3
+```
 # Eval
 ```bash
 python main.py -c config/env.yaml \
@@ -52,20 +79,31 @@ python main.py -c config/env.yaml \
   eval.use_gen_metrics=true eval.use_rec_metrics=true
 ```
 
-with nn-baseline
+compare with nn-baseline
 
 ```bash
-python main.py -c config/env.yaml \
-  scenarios/chi3d.yaml -- \
+python main.py -c config/env.yaml scenarios/chi3d.yaml -- \
   run.job=eval \
-  run.name=018_chi3d \
-  resume.step=20000 \
-  'run.datasets=["chi3d"]' \
-  'eval.sampling_target=["sbj","second_sbj"]' \
-  eval.use_gen_metrics=true eval.use_rec_metrics=true \
-  eval.nn_baseline=true eval.nn_baseline_ref_split=train eval.nn_baseline_k=1
+  run.name=019_chi3d \
+  resume.step=70000 \
+  run.datasets='["chi3d"]' \
+  eval.sampling_target='["sbj","second_sbj"]' \
+  eval.use_gen_metrics=true \
+  eval.use_rec_metrics=true \
+  eval.method_name=hhgen
 ```
 
+```bash
+python main.py -c config/env.yaml scenarios/chi3d.yaml -- \
+  run.job=eval \
+  run.name=020_nn_000_chi3d \
+  resume.step=0 \
+  run.datasets='["chi3d"]' \
+  eval.sampling_target='["sbj","second_sbj"]' \
+  eval.use_gen_metrics=true \
+  eval.use_rec_metrics=true \
+  eval.method_name=NNBaseline
+```
 # Prepocessing chi3d
 
 Before running prepocesssing, put chi3d raw data in this folder structure

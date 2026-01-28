@@ -36,6 +36,93 @@ def init_object_orientation(src_axis: torch.Tensor, tgt_axis: torch.Tensor) -> t
     R = torch.bmm(U, V.transpose(2, 1))
     return R
 
+# ---------------------------
+# Pose-only canonicalization (remove translation + global yaw)
+# ---------------------------
+def _rot_inv_about_axis(axis: str, yaw: float) -> np.ndarray:
+    c = np.cos(-yaw).astype(np.float32)
+    s = np.sin(-yaw).astype(np.float32)
+    if axis == "y":  # y-up: rotate in x-z plane
+        return np.array([[c, 0.0, s],
+                         [0.0, 1.0, 0.0],
+                         [-s, 0.0, c]], dtype=np.float32)
+    if axis == "z":  # z-up: rotate in x-y plane
+        return np.array([[c, -s, 0.0],
+                         [s,  c, 0.0],
+                         [0.0, 0.0, 1.0]], dtype=np.float32)
+    raise ValueError(f"Unsupported axis: {axis}")
+
+def _infer_up_axis_from_body(j: np.ndarray) -> str:
+    # use shoulders - hips as a crude "up" direction
+    J = j.shape[0]
+    lhip, rhip = 1, 2
+    lsho, rsho = 16, 17
+    if J > max(lsho, rsho, lhip, rhip):
+        hip_mid = 0.5 * (j[lhip] + j[rhip])
+        sho_mid = 0.5 * (j[lsho] + j[rsho])
+        up_vec = sho_mid - hip_mid
+        # choose dominant axis between y and z (CHI3D is typically z-up)
+        return "z" if abs(up_vec[2]) > abs(up_vec[1]) else "y"
+    # fallback: default to z (matches your chi3d stats)
+    return "z"
+
+def _estimate_yaw(j: np.ndarray, up_axis: str) -> float:
+    J = j.shape[0]
+    lhip, rhip = 1, 2
+    lsho, rsho = 16, 17
+    if J <= max(lhip, rhip):
+        return 0.0
+
+    across = j[rhip] - j[lhip]
+    if J > max(lsho, rsho):
+        across2 = j[rsho] - j[lsho]
+        across = 0.5 * (across + across2)
+
+    # project across to horizontal plane
+    across_h = across.copy()
+    if up_axis == "y":
+        across_h[1] = 0.0
+        up = np.array([0.0, 1.0, 0.0], np.float32)
+        # forward = up x across
+        forward = np.cross(up, across_h).astype(np.float32)
+        forward[1] = 0.0
+        forward /= (np.linalg.norm(forward) + 1e-8)
+        # yaw to align forward -> +Z
+        return float(np.arctan2(forward[0], forward[2]))
+
+    if up_axis == "z":
+        across_h[2] = 0.0
+        up = np.array([0.0, 0.0, 1.0], np.float32)
+        forward = np.cross(up, across_h).astype(np.float32)
+        forward[2] = 0.0
+        forward /= (np.linalg.norm(forward) + 1e-8)
+        # yaw to align forward -> +Y
+        return float(np.arctan2(forward[0], forward[1]))
+
+    return 0.0
+
+def canonicalize_pose_only_joints(joints: np.ndarray) -> np.ndarray:
+    j = joints.astype(np.float32)
+    j = j - j[[0]]  # remove translation (root-center)
+
+    up_axis = _infer_up_axis_from_body(j)
+    yaw = _estimate_yaw(j, up_axis)
+    R = _rot_inv_about_axis(up_axis, yaw)
+
+    # apply rotation (row-vector points)
+    j = (R @ j.T).T
+
+    # resolve 180° ambiguity: enforce rhip.x > lhip.x after canonicalization
+    J = j.shape[0]
+    lhip, rhip = 1, 2
+    if J > max(lhip, rhip):
+        if j[rhip, 0] < j[lhip, 0]:
+            Rpi = _rot_inv_about_axis(up_axis, -np.pi)  # rotate by +pi
+            j = (Rpi @ j.T).T
+
+    return j
+
+
 
 # ---------------------------
 # HDF5 structure helpers
@@ -227,8 +314,14 @@ def get_data_for_sequence(
         # ---- features ----
         if knn.model_features == "human_joints":
             sbj_j = np.asarray(hdf5_sequence[human_keys["j"]][t_stamp], dtype=np.float32)  # (J,3)
-            sbj_j = sbj_j - sbj_j[[0]]  # center on root
+
+            if getattr(knn, "pose_only", False):
+                sbj_j = canonicalize_pose_only_joints(sbj_j)   # root + yaw
+            else:
+                sbj_j = sbj_j - sbj_j[[0]]  # only root-center
+
             features[t] = sbj_j[1:].reshape(-1)
+
 
         elif knn.model_features == "human_parameters":
             # concat (1,9)+(21,9)+(15,9)+(15,9) => (52,9)
