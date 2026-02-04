@@ -50,7 +50,6 @@ python main.py -c config/env.yaml \
   'run.datasets=["chi3d"]' \
   'eval.sampling_target=["sbj","second_sbj"]' \
   eval.use_gen_metrics=true eval.use_rec_metrics=true
-  # eval.nn_baseline=true eval.nn_baseline_ref_split=train eval.nn_baseline_k=1
 ```
 
 # Prepocessing chi3d

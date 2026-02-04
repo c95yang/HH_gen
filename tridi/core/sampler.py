@@ -54,20 +54,17 @@ class Sampler:
         self.text_condition_model = None
 # 
     @torch.no_grad()
-    def sample_step(self, batch) -> Tuple[TriDiModelOutput, List[str]]:
-        # self.model.eval()
-        #print batch info
-        # print("Sampling batch:")
-        # print(f"  batch.sbj_contact_indexes: {batch.sbj_contact_indexes.shape}")
-
-        output = self.model(batch, "sample", sample_type=self.cfg.sample.mode)
-        # print("Output obtained from model")
-        # print("Output shape:", output.shape if hasattr(output, 'shape') else "N/A")
-
-        if isinstance(output, tuple):
-            output, intermediate_outputs = output
-
-        return self.model.split_output(output)
+    def sample_step(self, batch):
+        result = self.model(batch, "sample", sample_type=self.cfg.sample.mode)
+        retrieved_output = None
+        if isinstance(result, tuple):
+            output, retrieved_output = result
+        else:
+            output = result
+        output = self.model.split_output(output)
+        if retrieved_output is not None:
+            retrieved_output = self.model.split_output(retrieved_output)
+        return output, retrieved_output
 
     @staticmethod
     def sample_mode_to_str(sample_mode, contacts_mode):
@@ -100,45 +97,48 @@ class Sampler:
             sample_mode = self.sample_mode_to_str(self.cfg.sample.mode, self.cfg.sample.contacts_mode)
             samples_folder = self.base_samples_folder / f"{dataloader.dataset.name}" / f"{sample_mode}"
             samples_folder.mkdir(parents=True, exist_ok=True)
-            print(f"Created samples folder: {samples_folder}")
 
             for batch_i, batch in enumerate(dataloader):
                 for repetition_id in range(self.cfg.sample.repetitions):
-                    # Get outputs
-                    output = self.sample_step(batch)
+                    output, retrieved_output = self.sample_step(batch)
 
-                    # Convert output to meshes
                     sbj_meshes, second_sbj_meshes = self.mesh_model.get_meshes(
                         output, batch.scale, batch.sbj_gender, batch.second_sbj_gender
                     )
 
-                    # Export meshes
-                    # For conditional sampling add GT to export
+                    raw_sbj_meshes = raw_second_sbj_meshes = None
+                    if retrieved_output is not None:
+                        raw_sbj_meshes, raw_second_sbj_meshes = self.mesh_model.get_meshes(
+                            retrieved_output, batch.scale, batch.sbj_gender, batch.second_sbj_gender
+                        )
+
+                    sample_mode = self.cfg.sample.mode
+                    is_baseline = getattr(self.cfg.run, "job", None) == "baseline"
                     for sample_idx in range(len(sbj_meshes)):
-                        # save meshes
                         sbj = batch.sbj[sample_idx]
                         t_stamp = batch.t_stamp[sample_idx]
-                        target_folder = samples_folder / sbj  
+                        target_folder = samples_folder / sbj
                         target_folder.mkdir(parents=True, exist_ok=True)
 
-                        if self.cfg.sample.mode[0] == "1":
+                        prefix = f"{t_stamp:04d}_{repetition_id:02d}"
+                        if is_baseline and raw_sbj_meshes is not None:
+                            raw_sbj_meshes[sample_idx].export(target_folder / f"{prefix}_{sample_mode}_retrieved_raw_subject.ply")
+                            raw_second_sbj_meshes[sample_idx].export(target_folder / f"{prefix}_{sample_mode}_retrieved_raw_second_subject.ply")
+
+                        if sample_mode[0] == "1":
                             target_sbj = f"{t_stamp:04d}_{repetition_id:02d}_subject_sample.ply"
                             save_sbj = True
                         else:
                             target_sbj = f"{t_stamp:04d}_subject_GT.ply"
                             save_sbj = repetition_id == 0
-
-                        if self.cfg.sample.mode[1] == "1":
+                        if sample_mode[1] == "1":
                             target_second_sbj = f"{t_stamp:04d}_{repetition_id:02d}_second_subject_sample.ply"
                             save_second_sbj = True
-
                         else:
                             target_second_sbj = f"{t_stamp:04d}_second_subject_GT.ply"
                             save_second_sbj = repetition_id == 0
-
                         if save_sbj:
                             sbj_meshes[sample_idx].export(target_folder / target_sbj)
-
                         if save_second_sbj:
                             second_sbj_meshes[sample_idx].export(target_folder / target_second_sbj)
 
@@ -154,6 +154,11 @@ class Sampler:
 
         for dataloader in self.dataloaders:
             # Log info
+            logger.info(
+                f'    Sampling mode {self.cfg.sample.mode} for: {dataloader.dataset.name}\n'
+                f'    Number of samples: {len(dataloader.dataset)}\n'
+            )
+            # create folder for the samples
             logger.info(
                 f'    Sampling mode {self.cfg.sample.mode} for: {dataloader.dataset.name}\n'
                 f'    Number of samples: {len(dataloader.dataset)}\n'
@@ -234,11 +239,11 @@ class Sampler:
                     # Attributes
                     sbj_group.attrs['T'] = T
 
-            # prediction loop
+
             for batch_idx, batch in enumerate(dataloader):
                 for repetition_id in range(self.cfg.sample.repetitions):
                     # Get outputs
-                    output = self.sample_step(batch)
+                    output, _ = self.sample_step(batch)
 
                     # Convert output to meshes
                     sbj_meshes, second_sbj_meshes = self.mesh_model.get_meshes(

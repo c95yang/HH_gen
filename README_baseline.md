@@ -18,11 +18,11 @@ Output: Person B's Features (as meshes or HDF5)
 
 ```bash
 python main.py -c config/env.yaml scenarios/chi3d.yaml -- \
-  run.job=baseline_sample \
-  run.name=baseline_chi3d \
+  run.job=baseline \
+  run.name=002_baseline_poseshape \
   sample.target=meshes \
   dataloader.batch_size=4096 \
-  sample.mode=sample_01 \
+  sample.mode=sample_10 \
   run.datasets='["chi3d"]' \
   sample.repetitions=1
 ```
@@ -31,11 +31,11 @@ python main.py -c config/env.yaml scenarios/chi3d.yaml -- \
 
 ```bash
 python main.py -c config/env.yaml scenarios/chi3d.yaml -- \
-  run.job=baseline_sample \
-  run.name=002_baseline_chi3d \
+  run.job=baseline \
+  run.name=002_baseline_poseshape \
   sample.target=hdf5 \
   dataloader.batch_size=4096 \
-  sample.mode=sample_01 \
+  sample.mode=sample_10 \
   run.datasets='["chi3d"]' \
   sample.repetitions=1
 ```
@@ -55,7 +55,7 @@ After generating baseline samples, evaluate:
 ```bash
 python main.py -c config/env.yaml scenarios/chi3d.yaml -- \
   run.job=eval \
-  run.name=002_baseline_chi3d \
+  run.name=002_baseline_poseshape \
   'run.datasets=["chi3d"]' \
   'eval.sampling_target=["sbj","second_sbj"]' \
   eval.use_gen_metrics=true \

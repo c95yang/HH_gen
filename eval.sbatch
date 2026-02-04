@@ -22,7 +22,7 @@ echo "CUDA_VISIBLE_DEVICES: $CUDA_VISIBLE_DEVICES"
 nvidia-smi
 
 scenario=chi3d.yaml
-run_name=001_chi3d_aug
+run_name=002_baseline_joints
 step=50000
 ckpt=experiments/${run_name}/checkpoints/checkpoint-step-00${step}.pth
 target=hdf5
