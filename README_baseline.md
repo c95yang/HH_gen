@@ -22,7 +22,7 @@ python main.py -c config/env.yaml scenarios/chi3d.yaml -- \
   run.name=002_baseline_poseshape \
   sample.target=meshes \
   dataloader.batch_size=4096 \
-  sample.mode=sample_10 \
+  sample.mode=sample_01 \
   run.datasets='["chi3d"]' \
   sample.repetitions=1
 ```
@@ -39,14 +39,6 @@ python main.py -c config/env.yaml scenarios/chi3d.yaml -- \
   run.datasets='["chi3d"]' \
   sample.repetitions=1
 ```
-
-### Sampler Integration
-
-The `Sampler` class treats baseline model same as TriDi:
-- Calls `model.forward(batch)` to get predictions
-- Converts joints to meshes (if target=meshes)
-- Saves to HDF5 (if target=hdf5)
-- No modifications needed!
 
 ## Evaluation
 

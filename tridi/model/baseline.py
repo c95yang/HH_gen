@@ -91,7 +91,7 @@ class NNBaseline:
         self.cfg = cfg
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.sample_mode = self.cfg.sample.mode
-        self.feature_type = "pose_shape"  # Options: "full", "pose_shape", "pose_only", "joints_only"
+        self.feature_type = "pose_only"  # Options: "full", "pose_shape", "pose_only", "joints_only"
         
         # Store training data features and poses
         self.train_data_cache: Dict[str, Dict] = {}
