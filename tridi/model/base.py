@@ -192,8 +192,8 @@ class BaseTriDiModel(ModelMixin):
 
     def forward(self, batch: HHBatchData, mode='train', sample_type: Optional[Tuple]=None, **kwargs):
         """A wrapper around the forward method for training and inference"""
-        if isinstance(batch, dict):  # fixes a bug with multiprocessing where batch becomes a dict
-            batch = HHBatchData(**batch)  # it really makes no sense, I do not understand it
+        if isinstance(batch, dict):  
+            batch = HHBatchData(**batch)  
             print("Converted batch dict to HHBatchData")
             #print contents of batch
             # for key, value in batch.items():

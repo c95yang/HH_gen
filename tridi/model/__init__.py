@@ -5,6 +5,7 @@ from omegaconf import OmegaConf
 from config.config import ProjectConfig
 from tridi.utils.training import compute_model_size
 from .tridi import TriDiModel
+from .baseline import NNBaseline
 
 logger = getLogger(__name__)
 
