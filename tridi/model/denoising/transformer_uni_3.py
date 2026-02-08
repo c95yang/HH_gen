@@ -49,6 +49,7 @@ class TransformertUni3WayModel(nn.Module):
         num_layers: int = 4,
         nhead: int = 8,
         dim_feedforward: int = 512,
+        cond_channels: int = 0,
     ):
         super().__init__()
         self.dim_sbj = dim_sbj
@@ -57,6 +58,7 @@ class TransformertUni3WayModel(nn.Module):
         self.dim_output = dim_output
         self.dim_timestep_embed = dim_timestep_embed
         self.num_layers = num_layers
+        self.cond_channels = cond_channels
 
         # Time projection function
         self.projection_T = Projection(self.dim_timestep_embed, self.dim_hidden)
@@ -69,8 +71,12 @@ class TransformertUni3WayModel(nn.Module):
 
         self.projection_second_S_shape = Projection(10, dim_hidden)
         self.projection_second_S_orient = Projection(6, dim_hidden)
-        self.projection_second_S_pose = Projection(dim_sbj - 19, dim_hidden)
+        self.projection_second_S_pose = Projection(dim_second_sbj - 19, dim_hidden)
         self.projection_second_S_transl = Projection(3, dim_hidden)
+        if self.cond_channels > 0:
+            assert self.cond_channels == 4, " gender conditioning: cond_channels=4"
+            self.sbj_gender_proj = Projection(2, dim_hidden)
+            self.second_gender_proj = Projection(2, dim_hidden)
 
 
         # Modality embeddings
@@ -111,48 +117,42 @@ class TransformertUni3WayModel(nn.Module):
         
         self.decoder_second_S_shape = Projection(dim_hidden, 10)
         self.decoder_second_S_orient = Projection(dim_hidden, 6)
-        self.decoder_second_S_pose = Projection(dim_hidden, dim_sbj - 19)
+        self.decoder_second_S_pose = Projection(dim_hidden, dim_second_sbj - 19)
         self.decoder_second_S_transl = Projection(dim_hidden, 3)
         
-    def prepare_time(self, t_1, t_2, device):
-        # Embed and project timesteps
+    def prepare_time(self, t_1, t_2, device, g1_emb=None, g2_emb=None):
+        if g1_emb is None:
+            g1_emb = 0.0
+        if g2_emb is None:
+            g2_emb = 0.0
+
         t_emb_1 = get_timestep_embedding(self.dim_timestep_embed, t_1, device)
-        t_emb_1 = self.projection_T(t_emb_1) + self.sbj_embedding  # B x D_t_emb
-        
+        t_emb_1 = self.projection_T(t_emb_1) + self.sbj_embedding + g1_emb
+
         t_emb_2 = get_timestep_embedding(self.dim_timestep_embed, t_2, device)
-        t_emb_2 = self.projection_T(t_emb_2) +self.second_sbj_embedding # B x D_t_emb
+        t_emb_2 = self.projection_T(t_emb_2) + self.second_sbj_embedding + g2_emb
 
         return t_emb_1.unsqueeze(1), t_emb_2.unsqueeze(1)
 
-    def prepare_sbj(self, sbj, is_second=False):
+
+    def prepare_sbj(self, sbj, is_second=False, gender_emb=None):
+        if gender_emb is None:
+            gender_emb = 0.0
+
         shape, global_orient, pose, global_transl = torch.split(sbj, [10, 6, 51*6, 3], dim=1)
 
         if is_second:
-            shape_proj = self.projection_second_S_shape(shape)
-            shape = shape_proj + self.second_sbj_embedding + self.second_sbj_shape_embedding
-
-            global_orient_proj = self.projection_second_S_orient(global_orient)
-            global_orient = global_orient_proj + self.second_sbj_embedding + self.second_global_orient_embedding
-
-            pose_proj = self.projection_second_S_pose(pose)
-            pose = pose_proj + self.second_sbj_embedding + self.second_sbj_pose_embedding
-
-            global_transl_proj = self.projection_second_S_transl(global_transl)
-            global_transl = global_transl_proj + self.second_sbj_embedding + self.second_global_transl_embedding
+            shape = self.projection_second_S_shape(shape) + self.second_sbj_embedding + self.second_sbj_shape_embedding + gender_emb
+            global_orient = self.projection_second_S_orient(global_orient) + self.second_sbj_embedding + self.second_global_orient_embedding + gender_emb
+            pose = self.projection_second_S_pose(pose) + self.second_sbj_embedding + self.second_sbj_pose_embedding + gender_emb
+            global_transl = self.projection_second_S_transl(global_transl) + self.second_sbj_embedding + self.second_global_transl_embedding + gender_emb
         else:
-            shape = self.projection_S_shape(shape)
-            shape = shape + self.sbj_embedding + self.sbj_shape_embedding
+            shape = self.projection_S_shape(shape) + self.sbj_embedding + self.sbj_shape_embedding + gender_emb
+            global_orient = self.projection_S_orient(global_orient) + self.sbj_embedding + self.global_orient_embedding + gender_emb
+            pose = self.projection_S_pose(pose) + self.sbj_embedding + self.sbj_pose_embedding + gender_emb
+            global_transl = self.projection_S_transl(global_transl) + self.sbj_embedding + self.global_transl_embedding + gender_emb
 
-            global_orient = self.projection_S_orient(global_orient)
-            global_orient = global_orient + self.sbj_embedding + self.global_orient_embedding
-
-            pose = self.projection_S_pose(pose)
-            pose = pose + self.sbj_embedding + self.sbj_pose_embedding
-
-            global_transl = self.projection_S_transl(global_transl)
-            global_transl = global_transl + self.sbj_embedding + self.global_transl_embedding
-
-        return torch.stack([shape, global_orient, pose, global_transl], dim=1)  # B x 4 x D
+        return torch.stack([shape, global_orient, pose, global_transl], dim=1)
 
 
     def unembed_prediction(self, x):
@@ -172,10 +172,18 @@ class TransformertUni3WayModel(nn.Module):
 
         return sbj, second_sbj
 
-    def forward(self, sbj, second_sbj, t1, t2):
-        t_1, t_2 = self.prepare_time(t1, t2, sbj.device)
-        sbj = self.prepare_sbj(sbj, is_second=False)
-        second_sbj = self.prepare_sbj(second_sbj, is_second=True)
+    def forward(self, sbj, second_sbj, t1, t2, cond=None):
+        g1_emb, g2_emb = None, None
+        if self.cond_channels > 0:
+            assert cond is not None, "cond_channels>0 但 forward 没传 cond"
+            g1 = cond[:, 0:2]
+            g2 = cond[:, 2:4]
+            g1_emb = self.sbj_gender_proj(g1)
+            g2_emb = self.second_gender_proj(g2)
+
+        t_1, t_2 = self.prepare_time(t1, t2, sbj.device, g1_emb, g2_emb)
+        sbj = self.prepare_sbj(sbj, is_second=False, gender_emb=g1_emb)
+        second_sbj = self.prepare_sbj(second_sbj, is_second=True, gender_emb=g2_emb)
 
         x = torch.cat([sbj, second_sbj, t_1, t_2], dim=1)
         x = self.layernorm(x)

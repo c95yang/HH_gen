@@ -12,12 +12,12 @@ python main.py -c \
   config/env.yaml \
   scenarios/chi3d.yaml -- \
   run.job=sample \
-  run.name=001_chi3d_aug \
+  run.name=018_chi3d \
   sample.target=meshes \
-  resume.checkpoint="experiments/001_chi3d_aug/checkpoints/checkpoint-step-0050000.pth" \
+  resume.checkpoint="experiments/018_chi3d/checkpoints/checkpoint-step-0050000.pth" \
   resume.step=50000 \
-  dataloader.batch_size=4096 \
-  sample.mode=sample_10 \
+  dataloader.batch_size=4 \
+  sample.mode=sample_01 \
   run.datasets='[chi3d]' \
   sample.dataset=normal \
   sample.repetitions=3
@@ -29,15 +29,33 @@ python main.py -c \
   config/env.yaml \
   scenarios/chi3d.yaml -- \
   run.job=sample \
-  run.name=000_chi3d \
+  run.name=021_chi3d \
   sample.target=hdf5 \
-  resume.checkpoint="experiments/000_chi3d/checkpoints/checkpoint-step-0020000.pth" \
-  resume.step=20000 \
+  resume.checkpoint="experiments/021_chi3d/checkpoints/checkpoint-step-0030000.pth" \
+  resume.step=30000 \
   dataloader.batch_size=4096 \
-  sample.mode=sample_10 \
+  sample.mode=sample_01 \
   run.datasets='[chi3d]' \
   sample.dataset=normal \
   sample.repetitions=3
+```
+
+force gender
+```bash
+python main.py -c config/env.yaml scenarios/chi3d.yaml -- \
+  run.job=sample \
+  run.name=020_chi3d \
+  model_conditioning.use_gender_conditioning=true \
+  sample.target=meshes \
+  resume.checkpoint="experiments/021_chi3d/checkpoints/checkpoint-step-0030000.pth" \
+  resume.step=30000 \
+  dataloader.batch_size=4 \
+  sample.mode=sample_10 \
+  run.datasets='["chi3d"]' \
+  sample.dataset=normal \
+  sample.repetitions=1 \
+  sample.sbj_gender=male \
+  sample.second_sbj_gender=male
 ```
 
 # Eval
@@ -52,17 +70,22 @@ python main.py -c config/env.yaml \
   eval.use_gen_metrics=true eval.use_rec_metrics=true
 ```
 
-with nn-baseline
+with sanity check
 
 ```bash
 python main.py -c config/env.yaml \
   scenarios/chi3d.yaml -- \
   run.job=eval \
-  run.name=018_chi3d \
-  resume.step=20000 \
+  run.name=021_chi3d \
+  resume.step=30000 \
   'run.datasets=["chi3d"]' \
   'eval.sampling_target=["sbj","second_sbj"]' \
+  eval.sanity_gt_train_test=true \
+  'eval.sanity_gt_test_test=true' \
+  eval.sanity_seed=42 \
+  eval.sanity_max_n=20000 \
   eval.use_gen_metrics=true eval.use_rec_metrics=true
+  
 ```
 
 # Prepocessing chi3d

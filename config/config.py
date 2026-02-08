@@ -111,6 +111,8 @@ class SampleConfig:
     target: str = 'meshes'  # 'meshes', 'hdf5'
     dataset: str = 'random'  # 'random', 'normal'
     samples_file: Optional[str] = None  # overidden inside metrics
+    sbj_gender: str = "random"         # "male"|"female"|"random"
+    second_sbj_gender: str = "random"  # "male"|"female"|"random"
 # ============================================================
 
 # ========================== EVAL ============================
@@ -124,6 +126,11 @@ class EvalConfig:
     nn_baseline: bool = False
     nn_baseline_k: int = 1
     nn_baseline_ref_split: str = "train"
+    sanity_gt_train_test: bool = False
+    sanity_max_per_split: int = 5000
+    sanity_gt_test_test: bool = False
+    sanity_seed: int = 42
+    sanity_max_n: int = -1 
 
 # ============================================================
 

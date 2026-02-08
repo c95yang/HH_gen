@@ -16,6 +16,7 @@ class DenoisingModel(ModelMixin):
         dim_second_sbj: int,
         dim_timestep_embed: int,
         dim_output: int,
+        cond_channels: int = 0,
         **kwargs
     ):
         super().__init__()
@@ -28,6 +29,7 @@ class DenoisingModel(ModelMixin):
                 dim_second_sbj=dim_second_sbj,
                 dim_timestep_embed=dim_timestep_embed,
                 dim_output=dim_output,
+                cond_channels=cond_channels,
                 **kwargs
             )
         else:
@@ -42,14 +44,23 @@ class DenoisingModel(ModelMixin):
         """ Receives input of shape (B, in_channels) and returns output
             of shape (B, out_channels) """
         if self.name.endswith('unidiffuser_3'):
+            data_dim = self.model.dim_sbj + self.model.dim_second_sbj
+            assert inputs.shape[1] >= data_dim, f"inputs dim {inputs.shape[1]} < data_dim {data_dim}"
+
             # print("Using unidiffuser 3 way model")
             with self.autocast_context:
+                data = inputs[:, :data_dim]
+                cond = inputs[:, data_dim:] if inputs.shape[1] > data_dim else None
+                if cond is not None and self.model.cond_channels > 0:
+                    assert cond.shape[1] == self.model.cond_channels, \
+                        f"cond dim mismatch: got {cond.shape[1]} vs expected {self.model.cond_channels}"
+
                 sbj, second_sbj = torch.split(
-                    inputs,
-                    [self.model.dim_sbj, self.model.dim_sbj],
+                    data,
+                    [self.model.dim_sbj, self.model.dim_second_sbj],  # ✅ 修正
                     dim=1
                 )
-            return self.model(sbj, second_sbj, t, t_second)
+                return self.model(sbj, second_sbj, t, t_second, cond)
         else:
             with self.autocast_context:
                 return self.model(inputs, t)

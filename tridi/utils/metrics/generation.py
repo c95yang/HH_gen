@@ -78,6 +78,110 @@ def coverage(
     cov = len(unique_indices) / len(knn.labels)
     return cov
 
+def sanity_nna_gt_train_vs_test(cfg, dataset="chi3d", sample_target="sbj",
+                                max_per_split=5000, seed=0):
+    """
+    GT(train) vs GT(test) of 1-NNA
+    """
+    
+    try:
+        import faiss
+    except ImportError:
+        faiss = None
+
+    def _extract(split: str):
+        knn = KnnWrapper(
+            model_features=sample_target_to_nn_feature(sample_target),
+            model_labels="data_source",   
+            model_type="general",
+            backend="faiss_cpu",
+        )
+        knn.sample_target = sample_target
+
+        train_datasets = [(dataset, split)]
+        test_datasets  = [(dataset, split)]
+        _, test_queries, _, _ = create_nn_model(cfg, knn, train_datasets, test_datasets)
+
+        X = _to_2d_float32(test_queries[dataset])  # (N,D)
+        # subsample
+        if max_per_split is not None and len(X) > max_per_split:
+            rng = np.random.default_rng(seed + (0 if split == "train" else 1))
+            idx = rng.choice(len(X), size=max_per_split, replace=False)
+            X = X[idx]
+        return X
+
+    Xtr = _extract("train")
+    Xte = _extract("test")
+
+    X = np.vstack([Xtr, Xte]).astype(np.float32)
+    y = np.concatenate([
+        np.zeros(len(Xtr), dtype=np.int64),
+        np.ones(len(Xte), dtype=np.int64)
+    ])
+
+    # 1-NN
+    if faiss is not None:
+        index = faiss.IndexFlatL2(X.shape[1])
+        index.add(X)
+        _, I = index.search(X, 2)
+        nn = I[:, 1]
+    else:
+        from sklearn.neighbors import NearestNeighbors
+        nn_model = NearestNeighbors(n_neighbors=2, algorithm="auto").fit(X)
+        _, I = nn_model.kneighbors(X)
+        nn = I[:, 1]
+
+    acc = float((y[nn] == y).mean())
+    return acc
+
+def sanity_gt_test_test_1nna(
+    cfg: ProjectConfig,
+    reference_dataset: str,
+    reference_set: str = "test",
+    sample_target: str = "sbj",
+    seed: int = 42,
+    max_n: int = -1,
+):
+    
+    import faiss
+    rng = np.random.default_rng(seed)
+
+    knn = KnnWrapper(
+        model_features=sample_target_to_nn_feature(sample_target),
+        model_labels="data_source",
+        model_type="general",
+        backend="faiss_cpu"
+    )
+    knn.sample_target = sample_target
+
+    train_datasets = [(reference_dataset, reference_set)]
+    test_datasets = [(reference_dataset, reference_set)]
+
+    _, test_queries, _, _ = create_nn_model(cfg, knn, train_datasets, test_datasets)
+
+    X = _to_2d_float32(test_queries[reference_dataset])  # (N,D)
+    if X.ndim != 2 or X.shape[0] < 4:
+        raise RuntimeError(f"sanity needs enough samples, got X={X.shape}")
+
+    
+    if max_n is not None and max_n > 0 and X.shape[0] > max_n:
+        idx = rng.choice(X.shape[0], size=max_n, replace=False)
+        X = X[idx]
+
+    N, D = X.shape
+    perm = rng.permutation(N)
+    half = N // 2
+    y = np.zeros(N, dtype=np.int64)
+    y[perm[half:]] = 1  
+
+    X = X.astype(np.float32, copy=False)
+    index = faiss.IndexFlatL2(D)
+    index.add(X)
+
+    # leave-one-out
+    _, I = index.search(X, 2)
+    y_pred = y[I[:, 1]]
+    return float(np.mean(y_pred == y))
 
 def minimum_matching_distance(
     cfg: ProjectConfig,

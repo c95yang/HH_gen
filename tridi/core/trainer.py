@@ -58,17 +58,22 @@ class Trainer:
         # get gt sbj vertices and joints
         with torch.no_grad():
             # print("Getting batch GT: ", batch)
-            batch_nt = batch.to(device=batch.sbj_c.device) 
-            B = batch_nt.sbj_global.shape[0]
-            I6 = torch.tensor([1,0,0, 0,1,0], device=batch_nt.sbj_global.device, dtype=batch_nt.sbj_global.dtype)\
-                    .view(1,6).repeat(B,1)
-            batch_nt.sbj_c = torch.zeros_like(batch_nt.sbj_c)
-            batch_nt.second_sbj_c = torch.zeros_like(batch_nt.second_sbj_c)
-            batch_nt.sbj_global = I6
-            batch_nt.second_sbj_global = I6
+            gt_sbj_vertices, gt_sbj_joints, gt_second_sbj_vertices, gt_second_sbj_joints = self.mesh_model.get_smpl_th(batch)
+            # batch_nt = batch.to(device=batch.sbj_c.device)  
+            # batch_nt.sbj_c = torch.zeros_like(batch.sbj_c)
+            # batch_nt.second_sbj_c = torch.zeros_like(batch.second_sbj_c)
+            
+            # batch_nt = batch.to(device=batch.sbj_c.device) 
+            # B = batch_nt.sbj_global.shape[0]
+            # I6 = torch.tensor([1,0,0, 0,1,0], device=batch_nt.sbj_global.device, dtype=batch_nt.sbj_global.dtype)\
+            #         .view(1,6).repeat(B,1)
+            # batch_nt.sbj_c = torch.zeros_like(batch_nt.sbj_c)
+            # batch_nt.second_sbj_c = torch.zeros_like(batch_nt.second_sbj_c)
+            # batch_nt.sbj_global = I6
+            # batch_nt.second_sbj_global = I6
 
-            gt_sbj_vertices, gt_sbj_joints, gt_second_sbj_vertices, gt_second_sbj_joints = \
-                self.mesh_model.get_smpl_th(batch_nt)
+            # gt_sbj_vertices, gt_sbj_joints, gt_second_sbj_vertices, gt_second_sbj_joints = \
+            #     self.mesh_model.get_smpl_th(batch_nt)
             batch.sbj_vertices = gt_sbj_vertices
             batch.sbj_joints = gt_sbj_joints
             batch.second_sbj_vertices = gt_second_sbj_vertices
@@ -82,10 +87,10 @@ class Trainer:
         output = self.model.split_output(aux_output[3], aux_output)
         
         # set output transl=0
-        output.sbj_c = torch.zeros_like(output.sbj_c)
-        output.second_sbj_c = torch.zeros_like(output.second_sbj_c)
-        output.sbj_global = I6
-        output.second_sbj_global = I6
+        # output.sbj_c = torch.zeros_like(output.sbj_c)
+        # output.second_sbj_c = torch.zeros_like(output.second_sbj_c)
+        # output.sbj_global = I6
+        # output.second_sbj_global = I6
 
         sbj_vertices, sbj_joints, second_sbj_vertices, second_sbj_joints = self.mesh_model.get_meshes_wkpts_th(
             output,

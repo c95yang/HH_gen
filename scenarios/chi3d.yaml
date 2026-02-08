@@ -22,19 +22,22 @@ model:
   beta_start: 1.0e-05
   beta_end: 0.008
   beta_schedule: linear
+model_conditioning:
+  use_gender_conditioning: true
+  num_genders: 2
 run:
   datasets:
   - chi3d
 dataloader:
   batch_size: 1024
-  workers: 4
+  workers: 12
   sampler: weighted
 train:
   mixed_precision: 'no'
   limit_train_batches: null
-  log_step_freq: 20
-  checkpoint_freq: 10000
-  max_steps: 100000
+  log_step_freq: 100
+  checkpoint_freq: 5000
+  max_steps: 50000
   limit_val_batches: null
   losses:
     denoise_1: 10.0
@@ -57,7 +60,7 @@ scheduler:
   type: transformers
   name: cosine
   kwargs:
-    num_warmup_steps: 15000
-    num_training_steps: 100000
+    num_warmup_steps: 8000
+    num_training_steps: 50000
 #python main.py -c config/env.yaml scenarios/chi3d.yaml -- run.name=chi3d run.job=train
 

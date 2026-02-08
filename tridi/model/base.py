@@ -130,6 +130,7 @@ class BaseTriDiModel(ModelMixin):
             dim_sbj=self.data_sbj_channels,
             dim_second_sbj=self.data_second_sbj_channels,
             dim_output=self.out_channels,
+            cond_channels=self.conditioning_model.cond_channels,
             # name, dim_timestep_embed, dim_hidden, num_layers
             **denoising_model_config.params
         )
@@ -158,6 +159,9 @@ class BaseTriDiModel(ModelMixin):
         x_t: Tensor,
         t: Optional[Tensor] = None,
         t_aux: Optional[Tensor] = None,
+        batch: Optional[HHBatchData] = None,
+        sbj_gender: Optional[Tensor] = None,
+        second_sbj_gender: Optional[Tensor] = None,
     ):
         fn = self.conditioning_model.get_input_with_conditioning
         sig = inspect.signature(fn)
@@ -182,6 +186,19 @@ class BaseTriDiModel(ModelMixin):
                 kwargs["timesteps_aux"] = t_aux
             elif "timesteps_second_sbj" in params:
                 kwargs["timesteps_second_sbj"] = t_aux
+        
+        # gender（get from batch）
+        if batch is not None:
+            if sbj_gender is None and hasattr(batch, "sbj_gender"):
+                sbj_gender = batch.sbj_gender
+            if second_sbj_gender is None and hasattr(batch, "second_sbj_gender"):
+                second_sbj_gender = batch.second_sbj_gender
+
+        if sbj_gender is not None and "sbj_gender" in params:
+            kwargs["sbj_gender"] = sbj_gender
+        if second_sbj_gender is not None and "second_sbj_gender" in params:
+            kwargs["second_sbj_gender"] = second_sbj_gender
+
         return fn(x_t, **kwargs)
 
     def forward_train(self, *args, **kwargs):
@@ -205,6 +222,7 @@ class BaseTriDiModel(ModelMixin):
             return self.forward_train(
                 sbj=sbj.to(self.device),
                 second_sbj=second_sbj.to(self.device),
+                batch=batch, 
                 **kwargs
             )
         elif mode == 'sample':
@@ -224,17 +242,18 @@ class BaseTriDiModel(ModelMixin):
 
     @staticmethod
     def merge_input_sbj(batch):
-        B = batch.sbj_global.shape[0]
-        device = batch.sbj_global.device
-        dtype = batch.sbj_global.dtype
+        # B = batch.sbj_global.shape[0]
+        # device = batch.sbj_global.device
+        # dtype = batch.sbj_global.dtype
     
-        I6 = torch.tensor([1,0,0, 0,1,0], device=device, dtype=dtype).view(1,6).repeat(B,1)
-
-        zc = torch.zeros_like(batch.sbj_c)
-        zc2 = torch.zeros_like(batch.second_sbj_c)
-        sbj_pose = torch.cat([I6, batch.sbj_pose, zc], dim=1)
+        # I6 = torch.tensor([1,0,0, 0,1,0], device=device, dtype=dtype).view(1,6).repeat(B,1)
+        sbj_pose = torch.cat([batch.sbj_global, batch.sbj_pose, batch.sbj_c], dim=1)
+        # zc = torch.zeros_like(batch.sbj_c)
+        # zc2 = torch.zeros_like(batch.second_sbj_c)
+        # sbj_pose = torch.cat([I6, batch.sbj_pose, zc], dim=1)
         sbj = torch.cat([batch.sbj_shape, sbj_pose], dim=1)
-        second_sbj_pose =torch.cat([I6, batch.second_sbj_pose, zc2], dim=1)
+        second_sbj_pose =torch.cat([batch.second_sbj_global, batch.second_sbj_pose, batch.second_sbj_c], dim=1)
+        #second_sbj_pose =torch.cat([I6, batch.second_sbj_pose, zc2], dim=1)
         second_sbj = torch.cat([batch.second_sbj_shape, second_sbj_pose], dim=1)
         return sbj, second_sbj
 

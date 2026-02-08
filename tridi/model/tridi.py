@@ -48,6 +48,7 @@ class TriDiModel(BaseTriDiModel):
         sbj: Tensor,
         second_sbj: Tensor,
         return_intermediate_steps: bool = False,
+        batch: Optional[HHBatchData] = None,
         **kwargs
     ):
         # Get dimensions
@@ -78,6 +79,7 @@ class TriDiModel(BaseTriDiModel):
             x_t,
             t=timestep_sbj,
             t_aux=timestep_second_sbj,
+            batch=batch,
         )
 
         # x_t_input = x_t
@@ -182,6 +184,8 @@ class TriDiModel(BaseTriDiModel):
         return_sample_every_n_steps: int = -1,
         # Whether to disable tqdm
         disable_tqdm: bool = False,
+        sbj_gender: Optional[Tensor] = None,
+        second_sbj_gender: Optional[Tensor] = None,
     ):
         # Set noise size
         B = 1 if batch is None else batch.batch_size()
@@ -251,7 +255,12 @@ class TriDiModel(BaseTriDiModel):
                 t_sbj_b = t_sbj.reshape(1).expand(B)
                 t_second_sbj_b = t_second_sbj.reshape(1).expand(B)
 
-                x_t_input = self.get_input_with_conditioning(_x_t, t=t_sbj_b, t_aux=t_second_sbj_b)
+                x_t_input = self.get_input_with_conditioning(
+                    _x_t, t=t_sbj_b, t_aux=t_second_sbj_b, batch=batch,
+                    sbj_gender=sbj_gender,
+                    second_sbj_gender=second_sbj_gender,
+                )
+
                 _pred = self.denoising_model(x_t_input, t_sbj_b, t_second_sbj_b)
 
 
@@ -303,7 +312,8 @@ class TriDiModel(BaseTriDiModel):
 
     @staticmethod
     def split_output(x_0_pred, aux_output=None):
-        out = TriDiModelOutput(
+        return TriDiModelOutput(
+        #out = TriDiModelOutput(
             sbj_shape=x_0_pred[:, :10],
             sbj_global=x_0_pred[:, 10:16],
             sbj_pose=x_0_pred[:, 16:16 + 51 * 6],
@@ -318,18 +328,18 @@ class TriDiModel(BaseTriDiModel):
             timesteps_second_sbj=aux_output[5] if aux_output is not None else None,
         )
         # hard-zero translation
-        out.sbj_c = torch.zeros_like(out.sbj_c)
-        out.second_sbj_c = torch.zeros_like(out.second_sbj_c)
+        # out.sbj_c = torch.zeros_like(out.sbj_c)
+        # out.second_sbj_c = torch.zeros_like(out.second_sbj_c)
 
         # hard-fix global orientation to identity (6D)
-        B = out.sbj_global.shape[0]
-        device, dtype = out.sbj_global.device, out.sbj_global.dtype
-        I6 = torch.tensor([1, 0, 0, 0, 1, 0], device=device, dtype=dtype).view(1, 6).repeat(B, 1)
+        # B = out.sbj_global.shape[0]
+        # device, dtype = out.sbj_global.device, out.sbj_global.dtype
+        # I6 = torch.tensor([1, 0, 0, 0, 1, 0], device=device, dtype=dtype).view(1, 6).repeat(B, 1)
 
-        out.sbj_global = I6
-        out.second_sbj_global = I6
+        # out.sbj_global = I6
+        # out.second_sbj_global = I6
         
-        return out
+        # return out
 
     def set_mesh_model(self, mesh_model):
         self.mesh_model = mesh_model

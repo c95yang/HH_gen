@@ -53,18 +53,60 @@ class Sampler:
         #self.text_condition_model = TextConditionModel("clip", device=self.device)
         self.text_condition_model = None
 # 
+    
     @torch.no_grad()
     def sample_step(self, batch):
-        result = self.model(batch, "sample", sample_type=self.cfg.sample.mode)
+        # make sure it's HHBatchData so we can override fields
+        if isinstance(batch, dict):
+            batch = HHBatchData(**batch)
+
+        B = batch.batch_size()
+        dev = batch.sbj_gender.device if hasattr(batch, "sbj_gender") else torch.device("cpu")
+
+        # 1) resolve gender from cfg (even "random" -> explicit tensor, so mesh matches conditioning)
+        g1 = self._gender_to_tensor(self.cfg.sample.sbj_gender, B, dev)          # (B,) long
+        g2 = self._gender_to_tensor(self.cfg.sample.second_sbj_gender, B, dev)   # (B,) long
+
+        # 2) override batch genders for mesh generation consistency
+        # dataset uses bool: True=female, False=male
+        batch.sbj_gender = (g1 == 1)
+        batch.second_sbj_gender = (g2 == 1)
+
+        # 3) pass gender to the model (conditioning)
+        result = self.model(
+            batch,
+            "sample",
+            sample_type=self.cfg.sample.mode,
+            sbj_gender=g1,                 # long OK
+            second_sbj_gender=g2,          # long OK
+        )
+
         retrieved_output = None
         if isinstance(result, tuple):
             output, retrieved_output = result
         else:
             output = result
+
         output = self.model.split_output(output)
         if retrieved_output is not None:
             retrieved_output = self.model.split_output(retrieved_output)
         return output, retrieved_output
+
+    
+    #new added
+    def _gender_to_tensor(self, spec: str, B: int, device) -> torch.Tensor:
+        """
+        returns LongTensor (B,) with {0: male, 1: female}
+        spec: "male" | "female" | "random"
+        """
+        spec = (spec or "random").lower()
+        if spec == "random":
+            return torch.randint(0, 2, (B,), device=device, dtype=torch.long)
+        if spec in ("male", "m", "0"):
+            return torch.zeros((B,), device=device, dtype=torch.long)
+        if spec in ("female", "f", "1"):
+            return torch.ones((B,), device=device, dtype=torch.long)
+        raise ValueError(f"Unknown gender spec: {spec}")
 
     @staticmethod
     def sample_mode_to_str(sample_mode, contacts_mode):

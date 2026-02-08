@@ -15,7 +15,9 @@ class ConditioningModelConfig:
     # contacts - for 3way unidiffuser
     use_contacts: str = "encoder_decimated_clip"  # "surface", "parts"
     contact_model: str = "gb_contacts"
-
+    # NEW: gender conditioning
+    use_gender_conditioning: bool = False
+    num_genders: int = 2
 
 @dataclass
 class DenoisingModelConfig:

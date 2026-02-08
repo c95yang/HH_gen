@@ -113,6 +113,29 @@ class Evaluator:
                                 "metric": k,
                                 "mean_std": f"{mean:.2f} ± {std:.2f}"
                             })
+        if getattr(self.cfg.eval, "sanity_gt_train_test", False):
+            for dataset in self.cfg.run.datasets:
+                for sample_target in self.cfg.eval.sampling_target:
+                    acc = generation.sanity_nna_gt_train_vs_test(
+                        self.cfg, dataset=dataset, sample_target=sample_target, max_per_split=5000
+                    )
+                    logger.info(f"[SANITY] GT train vs GT test 1-NNA ({dataset}, {sample_target}) = {acc*100:.2f}")
+
+
+        if getattr(self.cfg.eval, "sanity_gt_test_test", False):
+            logger.info("Running sanity: GT(test) vs GT(test) split-half 1-NNA")
+            for dataset in self.cfg.run.datasets:
+                for sample_target in self.cfg.eval.sampling_target:
+                    val = generation.sanity_gt_test_test_1nna(
+                        self.cfg,
+                        reference_dataset=dataset,
+                        reference_set=self.cfg.eval.split,   
+                        sample_target=sample_target,
+                        seed=getattr(self.cfg.eval, "sanity_seed", 42),
+                        max_n=getattr(self.cfg.eval, "sanity_max_n", -1),
+                    )
+                    logger.info(f"[SANITY] GT {self.cfg.eval.split} vs GT {self.cfg.eval.split} (split-half) 1-NNA "
+                                f"({dataset}, {sample_target}) = {val*100:.2f}")
 
         # =========================
         # Reconstruction metrics

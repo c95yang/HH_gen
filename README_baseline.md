@@ -35,7 +35,7 @@ python main.py -c config/env.yaml scenarios/chi3d.yaml -- \
   run.name=002_baseline_poseshape \
   sample.target=hdf5 \
   dataloader.batch_size=4096 \
-  sample.mode=sample_10 \
+  sample.mode=sample_01 \
   run.datasets='["chi3d"]' \
   sample.repetitions=1
 ```
