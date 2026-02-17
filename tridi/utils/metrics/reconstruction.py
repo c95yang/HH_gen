@@ -93,6 +93,18 @@ def align_to_root(joints, root_idx=0):
     return joints - joints[..., root_idx:root_idx + 1, :]
 
 
+def _replace_global_orient_with_gt(sampled_joints, sampled_global, gt_global):
+    sampled_joints = np.asarray(sampled_joints, dtype=np.float32)
+    sampled_joints = sampled_joints - sampled_joints[[0]]
+
+    R_pred = np.asarray(sampled_global, dtype=np.float32).reshape(3, 3)
+    R_gt = np.asarray(gt_global, dtype=np.float32).reshape(3, 3)
+
+    sampled_local = (R_pred.T @ sampled_joints.T).T
+    sampled_with_gt_global = (R_gt @ sampled_local.T).T
+    return sampled_with_gt_global
+
+
 def get_mpjpe(pred_joints, gt_joints):
     # root aligned
     pred_joints = align_to_root(pred_joints)
@@ -156,7 +168,8 @@ def get_sbj_metrics(
     cfg: ProjectConfig,
     samples_file: Union[str, Path],
     dataset: str,
-    sample_target: str = "sbj"
+    sample_target: str = "sbj",
+    use_gt_global_for_samples: bool = False,
 ):
     test_datasets = [(dataset, "test")]
     test_hdf5 = get_hdf5_files_for_nn(cfg, test_datasets)
@@ -177,6 +190,15 @@ def get_sbj_metrics(
             for t_stamp in T_stamps:
                 test_joints = test_sequence[sample_target + "_j"][t_stamp]
                 sampled_joints = sampled_sequence[sample_target + "_j"][t_stamp]
+
+                if use_gt_global_for_samples:
+                    global_key = f"{sample_target}_smpl_global"
+                    if global_key in sampled_sequence and global_key in test_sequence:
+                        sampled_global = sampled_sequence[global_key][t_stamp]
+                        gt_global = test_sequence[global_key][t_stamp]
+                        sampled_joints = _replace_global_orient_with_gt(
+                            sampled_joints, sampled_global, gt_global
+                        )
 
                 mpjpe_results.append(get_mpjpe(sampled_joints, test_joints))
                 mpjpe_pa_results.append(get_mpjpe_pa(sampled_joints, test_joints))

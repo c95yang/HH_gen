@@ -23,7 +23,7 @@ class KnnWrapper:
         model_type, backend="faiss_cpu"
     ):
         assert model_features in [
-            "human_joints", "human_pose"
+            "human_joints", "human_pose", "human_pose_shape", "human_parameters"
         ]
         assert model_labels in ["data_source", "object_pose", "human_parameters"]
         assert model_type in ["class_specific", "general"]
@@ -129,6 +129,11 @@ def create_nn_model(
     # "dataset": List[(sbj, second_sbj)]
     train_sequences = get_sequences_for_nn(cfg, train_datasets, train_hdf5)
     test_sequences = get_sequences_for_nn(cfg, test_datasets, test_hdf5)
+
+    # Keep a merged view for eval-time feature transforms that may need
+    # reference metadata regardless of whether it comes from train or test side.
+    knn._all_eval_hdf5_files = {**train_hdf5, **test_hdf5}
+    knn._all_eval_sequences = {**train_sequences, **test_sequences}
 
     # ===> 3. Load features
     if knn.model_type == 'general':

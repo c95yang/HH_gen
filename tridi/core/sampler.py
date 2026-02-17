@@ -14,7 +14,7 @@ from tridi.data.hh_batch_data import HHBatchData
 
 from config.config import ProjectConfig
 from tridi.data import get_eval_dataloader
-from tridi.model.base import TriDiModelOutput
+from tridi.model.base import TriDiModelOutput, apply_pose_only_like_baseline
 from tridi.model.wrappers.contact import ContactModel
 from tridi.model.wrappers.text_condition import TextConditionModel
 from tridi.model.wrappers.mesh import MeshModel
@@ -90,6 +90,12 @@ class Sampler:
         output = self.model.split_output(output)
         if retrieved_output is not None:
             retrieved_output = self.model.split_output(retrieved_output)
+
+        if bool(getattr(self.cfg.sample, "pose_only_like_baseline", False)):
+            output = apply_pose_only_like_baseline(output, enabled=True)
+            if retrieved_output is not None:
+                retrieved_output = apply_pose_only_like_baseline(retrieved_output, enabled=True)
+
         return output, retrieved_output
 
     

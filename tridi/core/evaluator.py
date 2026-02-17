@@ -47,12 +47,18 @@ class Evaluator:
     def evaluate(self):
         base_samples_folder = self._resolve_base_samples_folder()
         # print("Base samples folder:", base_samples_folder)
+        use_gt_global_for_samples = bool(getattr(self.cfg.eval, "use_gt_global_for_samples", False))
+        pose_only_like_baseline = bool(getattr(self.cfg.eval, "pose_only_like_baseline", False))
 
         rows: List[Dict[str, Any]] = []
         exp_name = str(self.cfg.run.name)
         step_str = str(self.cfg.resume.step)
 
         logger.info(f"Experiment: {self.cfg.run.name} step: {self.cfg.resume.step}")
+        if use_gt_global_for_samples:
+            logger.info("Eval option enabled: use_gt_global_for_samples=True")
+        if pose_only_like_baseline:
+            logger.info("Eval option enabled: pose_only_like_baseline=True (NN features use pose+shape)")
 
         # =========================
         # Generation metrics
@@ -154,7 +160,13 @@ class Evaluator:
                             logger.warning(f"\t\tNo sample files found at {samples_folder / sample_target}/samples_rep_*.hdf5, skipping reconstruction.")
                             continue
                         for samples_file in samples_files:
-                            mpjpe, mpjpe_pa = reconstruction.get_sbj_metrics(self.cfg, samples_file, dataset, sample_target)
+                            mpjpe, mpjpe_pa = reconstruction.get_sbj_metrics(
+                                self.cfg,
+                                samples_file,
+                                dataset,
+                                sample_target,
+                                use_gt_global_for_samples=use_gt_global_for_samples,
+                            )
                             metrics[f"{sample_target}_MPJPE"].append(mpjpe)
                             metrics[f"{sample_target}_MPJPE_PA"].append(mpjpe_pa)
 
@@ -197,4 +209,3 @@ class Evaluator:
                     "mean_std": row.get("mean_std", ""),
                 })
         logger.info(f"Saved evaluation results to {csv_path}")
-

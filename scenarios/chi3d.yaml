@@ -38,6 +38,13 @@ train:
   log_step_freq: 100
   checkpoint_freq: 5000
   max_steps: 50000
+  early_stop: true
+  early_stop_metric: "VAL_loss/total"
+  early_stop_mode: "min"
+  early_stop_patience: 8
+  early_stop_min_delta: 0.0
+  early_stop_warmup_epochs: 1
+  early_stop_save_best: true
   limit_val_batches: null
   losses:
     denoise_1: 10.0
@@ -62,5 +69,11 @@ scheduler:
   kwargs:
     num_warmup_steps: 8000
     num_training_steps: 50000
+sample:
+  # Fair NNBaseline-style sampling space: keep pose(+shape), force global=I6 and transl=0
+  pose_only_like_baseline: false
+eval:
+  # Fair NNBaseline-style generation metrics: NN features use pose+shape only
+  pose_only_like_baseline: false
 #python main.py -c config/env.yaml scenarios/chi3d.yaml -- run.name=chi3d run.job=train
 

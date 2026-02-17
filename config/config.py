@@ -60,7 +60,13 @@ class TrainConfig:
         # "obj_v2v": 10.0,
         # "sbj_contacts": 20.0
     })
-
+    early_stop: bool = False
+    early_stop_metric: str = "VAL_loss/total"
+    early_stop_mode: str = "min"
+    early_stop_patience: int = 10
+    early_stop_min_delta: float = 0.0
+    early_stop_warmup_epochs: int = 0
+    early_stop_save_best: bool = True 
 @dataclass
 class OptimizerConfig:
     type: str = "torch"
@@ -113,6 +119,9 @@ class SampleConfig:
     samples_file: Optional[str] = None  # overidden inside metrics
     sbj_gender: str = "random"         # "male"|"female"|"random"
     second_sbj_gender: str = "random"  # "male"|"female"|"random"
+    # If True, canonicalize generated outputs like NN baseline fairness setup:
+    # keep pose(+shape), force global=identity(6D), transl=0.
+    pose_only_like_baseline: bool = False
 # ============================================================
 
 # ========================== EVAL ============================
@@ -130,7 +139,12 @@ class EvalConfig:
     sanity_max_per_split: int = 5000
     sanity_gt_test_test: bool = False
     sanity_seed: int = 42
-    sanity_max_n: int = -1 
+    sanity_max_n: int = -1
+    # If True, evaluate generated samples with GT global orientation substituted in place
+    # of predicted global orientation (translation is already canceled by root-centering).
+    use_gt_global_for_samples: bool = False
+    # If True, generation metrics use pose(+shape)-only NN features (baseline-like fairness).
+    pose_only_like_baseline: bool = False
 
 # ============================================================
 
@@ -161,4 +175,3 @@ class ProjectConfig:
 
     sample: SampleConfig = SampleConfig()
     eval: EvalConfig = EvalConfig()
-

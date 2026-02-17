@@ -19,6 +19,8 @@ import torch
 from scipy.spatial.transform import Rotation
 from tqdm import tqdm
 
+from tridi.utils.geometry import matrix_to_rotation_6d
+
 
 def pseudo_inverse(mat: torch.Tensor) -> torch.Tensor:
     assert len(mat.shape) == 3
@@ -164,6 +166,74 @@ def _pick_human_keys(knn) -> Dict[str, str]:
     keys["betas"] = prefix + "smpl_betas"
     return keys
 
+
+def _sequence_uid(sequence: Tuple[str, str, str]) -> str:
+    sbj, obj, act = sequence
+    if obj and act:
+        return f"{sbj}/{obj}_{act}"
+    if obj:
+        return f"{sbj}/{obj}"
+    return str(sbj)
+
+
+def _to_rotmat3x3(x: np.ndarray) -> np.ndarray:
+    x = np.asarray(x, dtype=np.float32)
+    if x.shape == (3, 3):
+        return x
+    if x.shape == (1, 9):
+        return x.reshape(3, 3)
+    if x.shape == (9,):
+        return x.reshape(3, 3)
+    raise ValueError(f"Unsupported global orientation shape: {x.shape}")
+
+
+def _build_gt_global_lookup_for_samples(
+    knn,
+    sequences: Dict[str, List[Tuple[str, str, str]]],
+    hdf5_files: Dict[str, Path],
+) -> Dict[str, np.ndarray]:
+    ref_dataset = getattr(knn, "reference_dataset_for_samples", None)
+    if ref_dataset is None:
+        return {}
+
+    all_hdf5_files = getattr(knn, "_all_eval_hdf5_files", {})
+    all_sequences = getattr(knn, "_all_eval_sequences", {})
+
+    ref_hdf5_path = hdf5_files.get(ref_dataset, all_hdf5_files.get(ref_dataset, None))
+    if ref_hdf5_path is None:
+        return {}
+
+    ref_sequences = sequences.get(ref_dataset, all_sequences.get(ref_dataset, None))
+    if ref_sequences is None:
+        ref_sequences = get_sequence_from_hdf5(ref_hdf5_path)
+
+    human_keys = _pick_human_keys(knn)
+    global_key = human_keys["global"]
+    lookup: Dict[str, np.ndarray] = {}
+
+    with h5py.File(ref_hdf5_path, "r") as ref_hdf5:
+        for sequence in ref_sequences:
+            seq_uid = _sequence_uid(sequence)
+            hdf5_sequence = _resolve_sequence_group(ref_hdf5, sequence)
+            if global_key not in hdf5_sequence:
+                continue
+
+            globals_all = np.asarray(hdf5_sequence[global_key], dtype=np.float32)
+            if globals_all.ndim == 3 and globals_all.shape[1:] == (1, 9):
+                globals_all = globals_all.reshape(globals_all.shape[0], 3, 3)
+            elif globals_all.ndim == 2 and globals_all.shape[1] == 9:
+                globals_all = globals_all.reshape(globals_all.shape[0], 3, 3)
+            elif globals_all.ndim == 3 and globals_all.shape[1:] == (3, 3):
+                pass
+            else:
+                continue
+
+            T = int(hdf5_sequence.attrs.get("T", globals_all.shape[0]))
+            T = min(T, globals_all.shape[0])
+            lookup[seq_uid] = globals_all[:T]
+
+    return lookup
+
 def get_data_for_sequence(
     knn,
     sequence: Tuple[str, str, str],
@@ -207,6 +277,8 @@ def get_data_for_sequence(
     labels_list: List[np.ndarray] = []
 
     human_keys = _pick_human_keys(knn)
+    use_gt_global_for_samples = bool(getattr(knn, "use_gt_global_for_samples", False))
+    gt_global_lookup = getattr(knn, "_gt_global_lookup_for_samples", {})
 
     # Allocate features
     if knn.model_features == "human_joints":
@@ -215,6 +287,13 @@ def get_data_for_sequence(
         J = int(hdf5_sequence[human_keys["j"]].shape[1])
         feat_dim = (J - 1) * 3
         features = np.zeros((T, feat_dim), dtype=np.float32)
+
+    elif knn.model_features == "human_pose_shape":
+        # shape(10) + pose(51*6), no global/transl in feature
+        for k in [human_keys["betas"], human_keys["body"], human_keys["lh"], human_keys["rh"]]:
+            if k not in hdf5_sequence:
+                raise KeyError(f"Missing dataset '{k}' for pose-shape feature in sequence group for {sbj}.")
+        features = np.zeros((T, 10 + 51 * 6), dtype=np.float32)
 
     elif knn.model_features == "human_parameters":
         features = np.zeros((T, 52 * 3), dtype=np.float32)
@@ -228,7 +307,42 @@ def get_data_for_sequence(
         if knn.model_features == "human_joints":
             sbj_j = np.asarray(hdf5_sequence[human_keys["j"]][t_stamp], dtype=np.float32)  # (J,3)
             sbj_j = sbj_j - sbj_j[[0]]  # center on root
+
+            if use_gt_global_for_samples and dataset == "samples":
+                R_pred = np.eye(3, dtype=np.float32)
+                if human_keys["global"] in hdf5_sequence:
+                    R_pred = _to_rotmat3x3(np.asarray(hdf5_sequence[human_keys["global"]][t_stamp], dtype=np.float32))
+
+                seq_uid = _sequence_uid(sequence)
+                gt_globals = gt_global_lookup.get(seq_uid, None)
+                if gt_globals is not None and int(t_stamp) < gt_globals.shape[0]:
+                    # Replace predicted global orientation with GT orientation:
+                    # local = R_pred^T * joints, then world_with_gt = R_gt * local
+                    R_gt = gt_globals[int(t_stamp)]
+                    sbj_local = (R_pred.T @ sbj_j.T).T
+                    sbj_j = (R_gt @ sbj_local.T).T
+
             features[t] = sbj_j[1:].reshape(-1)
+
+        elif knn.model_features == "human_pose_shape":
+            betas = np.asarray(hdf5_sequence[human_keys["betas"]][t_stamp], dtype=np.float32).reshape(-1)
+
+            # body/lh/rh are stored as 9D rotation matrices per joint
+            pose9 = np.concatenate([
+                np.asarray(hdf5_sequence[human_keys["body"]][t_stamp], dtype=np.float32),
+                np.asarray(hdf5_sequence[human_keys["lh"]][t_stamp], dtype=np.float32),
+                np.asarray(hdf5_sequence[human_keys["rh"]][t_stamp], dtype=np.float32),
+            ], axis=0)
+
+            if pose9.ndim == 2 and pose9.shape[1] == 9:
+                pose_mat = pose9.reshape(-1, 3, 3)
+            elif pose9.ndim == 3 and pose9.shape[1:] == (3, 3):
+                pose_mat = pose9
+            else:
+                raise ValueError(f"Unexpected body/hand pose shape: {pose9.shape} for {sequence}")
+
+            pose6 = matrix_to_rotation_6d(torch.from_numpy(pose_mat)).reshape(-1).numpy().astype(np.float32)
+            features[t] = np.concatenate([betas, pose6], axis=0)
 
         elif knn.model_features == "human_parameters":
             # concat (1,9)+(21,9)+(15,9)+(15,9) => (52,9)
@@ -379,6 +493,11 @@ def get_features_for_nn(
         features_list = defaultdict(list)
         labels_list = defaultdict(list)
         t_stamps = defaultdict(list)
+
+    if getattr(knn, "use_gt_global_for_samples", False) and not hasattr(knn, "_gt_global_lookup_for_samples"):
+        knn._gt_global_lookup_for_samples = _build_gt_global_lookup_for_samples(
+            knn, sequences, hdf5_files
+        )
 
     for dataset_name, sequences_list in sequences.items():
         with h5py.File(hdf5_files[dataset_name], "r") as hdf5_dataset:

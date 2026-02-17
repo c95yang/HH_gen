@@ -72,6 +72,41 @@ class TriDiModelOutput:
                 return len(attr)
 
 
+def _identity_6d_like(x: Tensor) -> Tensor:
+    """Create identity rotation in 6D format with same batch/device/dtype as x."""
+    i6 = torch.tensor([1.0, 0.0, 0.0, 0.0, 1.0, 0.0], device=x.device, dtype=x.dtype)
+    if x.ndim == 1:
+        return i6
+    b = int(x.shape[0])
+    return i6.view(1, 6).repeat(b, 1)
+
+
+def apply_pose_only_like_baseline(
+    output: Optional[TriDiModelOutput],
+    enabled: bool = True,
+) -> Optional[TriDiModelOutput]:
+    """
+    Canonicalize model output for fair comparison with NN baseline:
+      - keep shape + pose
+      - force global to identity-6D
+      - force transl to zero
+    """
+    if (not enabled) or (output is None):
+        return output
+
+    if output.sbj_global is not None:
+        output.sbj_global = _identity_6d_like(output.sbj_global)
+    if output.second_sbj_global is not None:
+        output.second_sbj_global = _identity_6d_like(output.second_sbj_global)
+
+    if output.sbj_c is not None:
+        output.sbj_c = torch.zeros_like(output.sbj_c)
+    if output.second_sbj_c is not None:
+        output.second_sbj_c = torch.zeros_like(output.second_sbj_c)
+
+    return output
+
+
 def get_custom_betas(beta_start: float, beta_end: float, warmup_frac: float = 0.3, num_train_timesteps: int = 1000):
     """Custom beta schedule"""
     betas = np.linspace(beta_start, beta_end, num_train_timesteps, dtype=np.float32)

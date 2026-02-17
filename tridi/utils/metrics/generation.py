@@ -11,13 +11,15 @@ from tridi.model.nn.nn import KnnWrapper, create_nn_model
 from config.config import ProjectConfig
 
 
-def sample_target_to_nn_feature(sample_target: str):
+def sample_target_to_nn_feature(sample_target: str, pose_only_like_baseline: bool = False):
     """
     Map evaluator's sampling_target to NN feature type.
     Your evaluator passes: "sbj" / "second_sbj" (and maybe "obj" later).
     """
-    # multi-human: both are human joints features
+    # multi-human: both are human features
     if sample_target in ["sbj", "second_sbj"]:
+        if pose_only_like_baseline:
+            return "human_pose_shape"
         return "human_joints"
 
     raise ValueError(f"Unknown sample_target: {sample_target}")
@@ -43,6 +45,16 @@ def _to_2d_float32(x):
     return np.asarray(x, dtype=np.float32)
 
 
+def _configure_gt_global_override(
+    cfg: ProjectConfig,
+    knn: KnnWrapper,
+    reference_dataset: str,
+):
+    knn.use_gt_global_for_samples = bool(getattr(cfg.eval, "use_gt_global_for_samples", False))
+    knn.reference_dataset_for_samples = reference_dataset
+    knn.pose_only_like_baseline = bool(getattr(cfg.eval, "pose_only_like_baseline", False))
+
+
 def coverage(
     cfg: ProjectConfig,
     samples_file: Union[str, Path],
@@ -56,13 +68,17 @@ def coverage(
     cfg.sample.samples_file = samples_file
 
     knn = KnnWrapper(
-        model_features=sample_target_to_nn_feature(sample_target),
+        model_features=sample_target_to_nn_feature(
+            sample_target,
+            pose_only_like_baseline=bool(getattr(cfg.eval, "pose_only_like_baseline", False)),
+        ),
         model_labels="data_source",
         model_type="general",
         backend="faiss_cpu"
     )
     # <<< IMPORTANT: tell common.py which branch to read
     knn.sample_target = sample_target
+    _configure_gt_global_override(cfg, knn, reference_dataset)
 
     train_datasets = [(reference_dataset, reference_set)]
     test_datasets = [("samples", "test")]
@@ -91,12 +107,16 @@ def sanity_nna_gt_train_vs_test(cfg, dataset="chi3d", sample_target="sbj",
 
     def _extract(split: str):
         knn = KnnWrapper(
-            model_features=sample_target_to_nn_feature(sample_target),
+            model_features=sample_target_to_nn_feature(
+                sample_target,
+                pose_only_like_baseline=bool(getattr(cfg.eval, "pose_only_like_baseline", False)),
+            ),
             model_labels="data_source",   
             model_type="general",
             backend="faiss_cpu",
         )
         knn.sample_target = sample_target
+        knn.pose_only_like_baseline = bool(getattr(cfg.eval, "pose_only_like_baseline", False))
 
         train_datasets = [(dataset, split)]
         test_datasets  = [(dataset, split)]
@@ -147,12 +167,16 @@ def sanity_gt_test_test_1nna(
     rng = np.random.default_rng(seed)
 
     knn = KnnWrapper(
-        model_features=sample_target_to_nn_feature(sample_target),
+        model_features=sample_target_to_nn_feature(
+            sample_target,
+            pose_only_like_baseline=bool(getattr(cfg.eval, "pose_only_like_baseline", False)),
+        ),
         model_labels="data_source",
         model_type="general",
         backend="faiss_cpu"
     )
     knn.sample_target = sample_target
+    knn.pose_only_like_baseline = bool(getattr(cfg.eval, "pose_only_like_baseline", False))
 
     train_datasets = [(reference_dataset, reference_set)]
     test_datasets = [(reference_dataset, reference_set)]
@@ -196,12 +220,16 @@ def minimum_matching_distance(
     cfg.sample.samples_file = samples_file
 
     knn = KnnWrapper(
-        model_features=sample_target_to_nn_feature(sample_target),
+        model_features=sample_target_to_nn_feature(
+            sample_target,
+            pose_only_like_baseline=bool(getattr(cfg.eval, "pose_only_like_baseline", False)),
+        ),
         model_labels="data_source",
         model_type="general",
         backend="faiss_cpu"
     )
     knn.sample_target = sample_target
+    _configure_gt_global_override(cfg, knn, reference_dataset)
 
     train_datasets = [("samples", "test")]
     test_datasets = [(reference_dataset, reference_set)]
@@ -231,12 +259,16 @@ def nearest_neighbor_accuracy(
     cfg.sample.samples_file = samples_file
 
     knn = KnnWrapper(
-        model_features=sample_target_to_nn_feature(sample_target), # "human_joints",
+        model_features=sample_target_to_nn_feature(
+            sample_target,
+            pose_only_like_baseline=bool(getattr(cfg.eval, "pose_only_like_baseline", False)),
+        ),
         model_labels="data_source",
         model_type="general",
         backend="faiss_cpu"
     )
     knn.sample_target = sample_target
+    _configure_gt_global_override(cfg, knn, reference_dataset)
 
     train_datasets = [(d, compare_against) for d in datasets]
     test_datasets = [(d, compare_against) for d in datasets]
@@ -280,12 +312,16 @@ def sample_distance(
     cfg.sample.samples_file = samples_file
 
     knn = KnnWrapper(
-        model_features=sample_target_to_nn_feature(sample_target),
+        model_features=sample_target_to_nn_feature(
+            sample_target,
+            pose_only_like_baseline=bool(getattr(cfg.eval, "pose_only_like_baseline", False)),
+        ),
         model_labels="data_source",
         model_type="general",
         backend="faiss_cpu"
     )
     knn.sample_target = sample_target
+    _configure_gt_global_override(cfg, knn, reference_dataset)
 
     train_datasets = [(reference_dataset, reference_set)]
     test_datasets = [("samples", "")]
