@@ -43,6 +43,7 @@ class TransformertUni3WayModel(nn.Module):
         self,
         dim_sbj: int,
         dim_second_sbj: int,
+        dim_interaction: int,
         dim_hidden: int,
         dim_timestep_embed: int,
         dim_output: int,
@@ -54,6 +55,8 @@ class TransformertUni3WayModel(nn.Module):
         super().__init__()
         self.dim_sbj = dim_sbj
         self.dim_second_sbj = dim_second_sbj
+        self.dim_interaction = dim_interaction
+        self.has_interaction = self.dim_interaction > 0
         self.dim_hidden = dim_hidden
         self.dim_output = dim_output
         self.dim_timestep_embed = dim_timestep_embed
@@ -73,6 +76,8 @@ class TransformertUni3WayModel(nn.Module):
         self.projection_second_S_orient = Projection(6, dim_hidden)
         self.projection_second_S_pose = Projection(dim_second_sbj - 19, dim_hidden)
         self.projection_second_S_transl = Projection(3, dim_hidden)
+        if self.has_interaction:
+            self.projection_interaction = Projection(dim_interaction, dim_hidden)
         if self.cond_channels > 0:
             assert self.cond_channels == 4, " gender conditioning: cond_channels=4"
             self.sbj_gender_proj = Projection(2, dim_hidden)
@@ -82,6 +87,8 @@ class TransformertUni3WayModel(nn.Module):
         # Modality embeddings
         self.sbj_embedding = nn.Parameter(torch.randn(dim_hidden))
         self.second_sbj_embedding = nn.Parameter(torch.randn(dim_hidden))
+        if self.has_interaction:
+            self.interaction_embedding = nn.Parameter(torch.randn(dim_hidden))
 
         # Param embeddings
         self.sbj_pose_embedding = nn.Parameter(torch.randn(dim_hidden))
@@ -93,6 +100,8 @@ class TransformertUni3WayModel(nn.Module):
         self.second_sbj_shape_embedding = nn.Parameter(torch.randn(dim_hidden))
         self.second_global_orient_embedding = nn.Parameter(torch.randn(dim_hidden))
         self.second_global_transl_embedding = nn.Parameter(torch.randn(dim_hidden))
+        if self.has_interaction:
+            self.interaction_latent_embedding = nn.Parameter(torch.randn(dim_hidden))
 
         # Normalization
         self.layernorm = nn.LayerNorm(dim_hidden)
@@ -119,20 +128,33 @@ class TransformertUni3WayModel(nn.Module):
         self.decoder_second_S_orient = Projection(dim_hidden, 6)
         self.decoder_second_S_pose = Projection(dim_hidden, dim_second_sbj - 19)
         self.decoder_second_S_transl = Projection(dim_hidden, 3)
+        if self.has_interaction:
+            self.decoder_interaction = Projection(dim_hidden, dim_interaction)
         
-    def prepare_time(self, t_1, t_2, device, g1_emb=None, g2_emb=None):
+    def prepare_time(self, t_1, t_2, t_3, device, g1_emb=None, g2_emb=None):
         if g1_emb is None:
             g1_emb = 0.0
         if g2_emb is None:
             g2_emb = 0.0
+
+        t_1 = t_1.to(device)
+        t_2 = t_2.to(device)
+        if t_3 is not None:
+            t_3 = t_3.to(device)
 
         t_emb_1 = get_timestep_embedding(self.dim_timestep_embed, t_1, device)
         t_emb_1 = self.projection_T(t_emb_1) + self.sbj_embedding + g1_emb
 
         t_emb_2 = get_timestep_embedding(self.dim_timestep_embed, t_2, device)
         t_emb_2 = self.projection_T(t_emb_2) + self.second_sbj_embedding + g2_emb
+        if self.has_interaction:
+            if t_3 is None:
+                t_3 = torch.zeros_like(t_1)
+            t_emb_3 = get_timestep_embedding(self.dim_timestep_embed, t_3, device)
+            t_emb_3 = self.projection_T(t_emb_3) + self.interaction_embedding
+            return t_emb_1.unsqueeze(1), t_emb_2.unsqueeze(1), t_emb_3.unsqueeze(1)
 
-        return t_emb_1.unsqueeze(1), t_emb_2.unsqueeze(1)
+        return t_emb_1.unsqueeze(1), t_emb_2.unsqueeze(1), None
 
 
     def prepare_sbj(self, sbj, is_second=False, gender_emb=None):
@@ -170,24 +192,46 @@ class TransformertUni3WayModel(nn.Module):
             self.decoder_second_S_transl(x[:, 7]),
         ], dim=1)
 
-        return sbj, second_sbj
+        interaction = None
+        if self.has_interaction:
+            interaction = self.decoder_interaction(x[:, 8])
 
-    def forward(self, sbj, second_sbj, t1, t2, cond=None):
+        return sbj, second_sbj, interaction
+
+    def forward(self, sbj, second_sbj, interaction, t1, t2, t3=None, cond=None):
+        sbj = sbj.to(self.sbj_embedding.device)
+        second_sbj = second_sbj.to(sbj.device)
+        if interaction is not None:
+            interaction = interaction.to(sbj.device)
+
         g1_emb, g2_emb = None, None
         if self.cond_channels > 0:
             assert cond is not None, "cond_channels>0 但 forward 没传 cond"
+            cond = cond.to(device=sbj.device, dtype=sbj.dtype)
             g1 = cond[:, 0:2]
             g2 = cond[:, 2:4]
             g1_emb = self.sbj_gender_proj(g1)
             g2_emb = self.second_gender_proj(g2)
 
-        t_1, t_2 = self.prepare_time(t1, t2, sbj.device, g1_emb, g2_emb)
+        t_1, t_2, t_3 = self.prepare_time(t1, t2, t3, sbj.device, g1_emb, g2_emb)
         sbj = self.prepare_sbj(sbj, is_second=False, gender_emb=g1_emb)
         second_sbj = self.prepare_sbj(second_sbj, is_second=True, gender_emb=g2_emb)
 
-        x = torch.cat([sbj, second_sbj, t_1, t_2], dim=1)
+        tokens = [sbj, second_sbj]
+        if self.has_interaction:
+            assert interaction is not None, "Interaction branch enabled but interaction latent is missing"
+            interaction_token = self.projection_interaction(interaction) + self.interaction_embedding + self.interaction_latent_embedding
+            tokens.append(interaction_token.unsqueeze(1))
+        tokens.extend([t_1, t_2])
+        if self.has_interaction and t_3 is not None:
+            tokens.append(t_3)
+
+        x = torch.cat(tokens, dim=1)
         x = self.layernorm(x)
         x = self.transformer_encoder(x)
 
-        sbj, second_sbj = self.unembed_prediction(x)
-        return torch.cat([sbj, second_sbj], dim=1)
+        sbj, second_sbj, interaction_pred = self.unembed_prediction(x)
+        if interaction_pred is None:
+            return torch.cat([sbj, second_sbj], dim=1)
+
+        return torch.cat([sbj, second_sbj, interaction_pred], dim=1)

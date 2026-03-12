@@ -12,6 +12,7 @@ import torch
 
 from .hh_batch_data import HHBatchData
 from ..utils.geometry import matrix_to_rotation_6d
+from ..utils.interaction import InteractionLabelResolver
 
 logger = getLogger(__name__)
 
@@ -40,6 +41,8 @@ class HHDataset:
     fps: Optional[int] = 30
     max_timestamps: Optional[int] = None  # limit the maximum number of timestamps per sequence.
     filter_subjects: Optional[List[str]] = None  # only load the specified subjects
+    interaction_source: str = "both"  # seq_name | video_name | both
+    interaction_raw_root: Optional[Path] = None
 
     def __post_init__(self) -> None:
         # Open h5 dataset
@@ -57,6 +60,11 @@ class HHDataset:
 
         self.data = self._load_data()
         self._sort_data()
+        self._interaction_resolver = InteractionLabelResolver(
+            interaction_source=self.interaction_source,
+            raw_root=self.interaction_raw_root,
+        )
+        self._interaction_label_cache: Dict[str, Optional[str]] = {}
         logger.info(self.__str__())
     
     def __str__(self) -> str:
@@ -194,6 +202,24 @@ class HHDataset:
     def __getitem__(self, idx: int) -> HHBatchData:
         sample = self.data[idx] #H5DataSample(sequence='s02_Push_1', name='s02_Push_1', t_stamp=0)
         sequence = self.h5dataset[sample.sequence]
+
+        if sample.sequence in self._interaction_label_cache:
+            interaction_label = self._interaction_label_cache[sample.sequence]
+        else:
+            video_name = None
+            # h5 attrs may optionally contain a source video identifier.
+            for k in ["video_name", "video", "clip_name", "name"]:
+                if k in sequence.attrs:
+                    try:
+                        video_name = str(sequence.attrs[k])
+                    except Exception:
+                        video_name = None
+                    break
+            interaction_label = self._interaction_resolver.resolve(
+                seq_name=sample.sequence,
+                video_name=video_name,
+            )
+            self._interaction_label_cache[sample.sequence] = interaction_label
         
         # ==> augmentations
         sbj_smpl = {
@@ -257,6 +283,7 @@ class HHDataset:
             sbj=sample.sequence,
             second_sbj=sample.sequence,
             t_stamp=sample.t_stamp,
+            interaction_label=interaction_label,
             # subject
             sbj_shape=torch.tensor(sbj_smpl['betas'], dtype=torch.float),
             sbj_global=sbj_global,

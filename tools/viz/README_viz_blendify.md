@@ -1,4 +1,4 @@
-# HH_gen Blendify Visualization Toolchain (Independent of train/sample/eval)
+# HH_gen Blendify Visualization Toolchain (Current main model: full H1/H2/Interaction)
 
 This folder provides a **minimal-intrusion** rendering pipeline:
 - It only reads exported PLY files from `_viz/ply/...`
@@ -9,14 +9,32 @@ This folder provides a **minimal-intrusion** rendering pipeline:
 
 ## 1) Select cases from sampling hdf5
 
-First, generate a compact case list from `samples_rep_*.hdf5`:
+First, generate a compact case list from `samples_rep_*.hdf5`.
+
+For the current main model (`experiments/029_chi3d_hhi_full`), sample folders for eval/vis are typically:
+- `.../chi3d/sbj` from `sample.mode=100`
+- `.../chi3d/second_sbj` from `sample.mode=010`
+
+Example (`sbj`):
 
 ```bash
 python tridi/tools/vis/select_cases_from_hdf5.py \
-  --samples_dir "/media/uv/Data/workspace/HH_gen/experiments/021_chi3d/artifacts/step_30000_samples/chi3d/sbj" \
+  --samples_dir "/media/uv/Data/workspace/HH_gen/experiments/032_chi3d_hhi_split1_protoce/artifacts/step_35000_samples/chi3d/sbj" \
   --dataset_root "/media/uv/Data/workspace/HH_gen/tridi/data/preprocessed/chi3d_smplx" \
-  --mode 10
+  --mode 100
 ```
+
+```bash
+python tridi/tools/vis/select_cases_from_hdf5.py \
+  --samples_dir "/media/uv/Data/workspace/HH_gen/experiments/032_chi3d_hhi_split1_protoce/artifacts/step_35000_samples/chi3d/second_sbj" \
+  --dataset_root "/media/uv/Data/workspace/HH_gen/tridi/data/preprocessed/chi3d_smplx" \
+  --mode 010
+```
+
+`--mode` here is a **human-target scoring mode**:
+- `10`/`100` → score `sbj`
+- `01`/`010` → score `second_sbj`
+- `11`/`110`/`111` → score both humans (average)
 
 This writes:
 - `<samples_dir>/_viz/cases.json`
@@ -27,10 +45,27 @@ This writes:
 
 ```bash
 python tridi/tools/vis/export_cases_to_ply.py \
-  --samples_dir "/media/uv/Data/workspace/HH_gen/experiments/021_chi3d/artifacts/step_30000_samples/chi3d/sbj" \
+  --samples_dir "/media/uv/Data/workspace/HH_gen/experiments/032_chi3d_hhi_split1_protoce/artifacts/step_35000_samples/chi3d/sbj" \
   --dataset_root "/media/uv/Data/workspace/HH_gen/tridi/data/preprocessed/chi3d_smplx" \
   --smplx_model_dir "/media/uv/Data/workspace/HH_gen/tridi/data/smplx_models" \
-  --mode 10 \
+  --mode 100 \
+  --k_preds 3 \
+  --rep_strategy best_median_worst \
+  --use_batch_gender \
+  --config_env "/media/uv/Data/workspace/HH_gen/config/env.yaml" \
+  --scenario_yaml "/media/uv/Data/workspace/HH_gen/scenarios/chi3d.yaml" \
+  --datasets "chi3d" \
+  --default_sbj_gender male \
+  --default_second_sbj_gender female \
+  --default_gender neutral
+```
+
+```bash
+python tridi/tools/vis/export_cases_to_ply.py \
+  --samples_dir "/media/uv/Data/workspace/HH_gen/experiments/032_chi3d_hhi_split1_protoce/artifacts/step_35000_samples/chi3d/second_sbj" \
+  --dataset_root "/media/uv/Data/workspace/HH_gen/tridi/data/preprocessed/chi3d_smplx" \
+  --smplx_model_dir "/media/uv/Data/workspace/HH_gen/tridi/data/smplx_models" \
+  --mode 010 \
   --k_preds 3 \
   --rep_strategy best_median_worst \
   --use_batch_gender \
@@ -73,8 +108,18 @@ pip install -r tools/viz/requirements_viz.txt
 
 ```bash
 python tools/viz/render_blendify_cases.py \
-  --ply_root "/media/uv/Data/workspace/HH_gen/experiments/021_chi3d/artifacts/step_30000_samples/chi3d/sbj/_viz/ply" \
-  --out_root "/media/uv/Data/workspace/HH_gen/experiments/021_chi3d/artifacts/step_30000_samples/chi3d/sbj/_viz/renders" \
+  --ply_root "/media/uv/Data/workspace/HH_gen/experiments/032_chi3d_hhi_split1_protoce/artifacts/step_35000_samples/chi3d/sbj/_viz/ply" \
+  --out_root "/media/uv/Data/workspace/HH_gen/experiments/032_chi3d_hhi_split1_protoce/artifacts/step_35000_samples/chi3d/sbj/_viz/renders" \
+  --k_preds 3 \
+  --res 1024 \
+  --camera auto \
+  --device cpu
+```
+
+```bash
+python tools/viz/render_blendify_cases.py \
+  --ply_root "/media/uv/Data/workspace/HH_gen/experiments/032_chi3d_hhi_split1_protoce/artifacts/step_35000_samples/chi3d/second_sbj/_viz/ply" \
+  --out_root "/media/uv/Data/workspace/HH_gen/experiments/032_chi3d_hhi_split1_protoce/artifacts/step_35000_samples/chi3d/second_sbj/_viz/renders" \
   --k_preds 3 \
   --res 1024 \
   --camera auto \
@@ -96,7 +141,7 @@ groups images by case directory, and writes one grid per case.
 
 ```bash
 python tools/viz/render_blendify_grid.py \
-  --renders_root "/media/uv/Data/workspace/HH_gen/experiments/021_chi3d/artifacts/step_30000_samples/chi3d/sbj/_viz/renders" \
+  --renders_root "/media/uv/Data/workspace/HH_gen/experiments/029_chi3d_hhi_full/artifacts/step_30000_samples/chi3d/sbj/_viz/renders" \
   --pattern "pred_rep*.png" \
   --cols 3 \
   --out_name "pred_grid.png"
@@ -112,6 +157,9 @@ Useful options:
 
 ## Input assumptions
 
+For full H1/H2/Interaction training, visualization still renders human meshes (`sbj`, `second_sbj`).
+The interaction branch is latent and affects generation, not direct PLY geometry export.
+
 Each case folder in `_viz/ply/<case_name>/` may contain (robustly handled if missing):
 - `condition*.ply`
 - `gt*.ply`
@@ -126,6 +174,7 @@ Missing assets are skipped with warnings.
 
 Primary output is written to:
 - `<out_root>/<case_name>/overlay.png`
+- `<out_root>/<case_name>/condition.png`
 - `<out_root>/<case_name>/gt.png`
 - `<out_root>/<case_name>/pred_repXX.png`
 - `<out_root>/<case_name>/pred_grid.png`

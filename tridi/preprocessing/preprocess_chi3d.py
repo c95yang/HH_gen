@@ -5,6 +5,7 @@ import argparse
 import json
 import pickle as pkl
 from copy import deepcopy
+from collections import defaultdict
 from multiprocessing import set_start_method
 from pathlib import Path
 
@@ -20,6 +21,175 @@ from .common import (tensor_to_cpu, DatasetSample, preprocess_worker, \
     get_sequences_list, init_preprocessing, \
     add_sequence_datasets_to_hdf5, add_meatada_to_hdf5)
 
+
+def _sequence_key(sequence: Path):
+    motion, index = sequence.stem.split()
+    sbj_name = sequence.parents[1].name
+    return sbj_name, motion, index
+
+
+def _interaction_edges_count(sequence: Path, signature_cache: dict) -> int:
+    sbj_name, _, _ = _sequence_key(sequence)
+    if sbj_name not in signature_cache:
+        signature_path = sequence.parents[1] / "interaction_contact_signature.json"
+        with open(signature_path, "r") as f:
+            signature_cache[sbj_name] = json.load(f)
+
+    signature_data = signature_cache[sbj_name]
+    signature_entry = signature_data.get(sequence.stem, {})
+    smplx_signature = signature_entry.get("smplx_signature", {})
+    region_ids = smplx_signature.get("region_id", [])
+    return len(region_ids)
+
+
+def _load_interaction_signature(sequence: Path, signature_cache: dict) -> dict:
+    sbj_name, _, _ = _sequence_key(sequence)
+    if sbj_name not in signature_cache:
+        signature_path = sequence.parents[1] / "interaction_contact_signature.json"
+        if signature_path.is_file():
+            with open(signature_path, "r") as f:
+                signature_cache[sbj_name] = json.load(f)
+        else:
+            signature_cache[sbj_name] = {}
+    return signature_cache[sbj_name]
+
+
+def _compute_split5_active_window(
+    sequence: Path,
+    total_frames: int,
+    signature_cache: dict,
+    margin_ratio: float,
+    min_frames: int,
+    keep_full_if_no_signal: bool,
+):
+    # default full-window behavior
+    full_window = (0, total_frames, False)
+
+    signatures = _load_interaction_signature(sequence, signature_cache)
+    signature_entry = signatures.get(sequence.stem, None)
+    if signature_entry is None:
+        if keep_full_if_no_signal:
+            return full_window
+        desired = min(total_frames, max(1, int(min_frames)))
+        center = total_frames // 2
+        start = max(0, center - desired // 2)
+        end = min(total_frames, start + desired)
+        start = max(0, end - desired)
+        return (start, end, False)
+
+    start_fr = signature_entry.get("start_fr", None)
+    end_fr = signature_entry.get("end_fr", None)
+
+    # fallback to single contact frame if explicit range is unavailable
+    if start_fr is None or end_fr is None:
+        fr_id = signature_entry.get("fr_id", None)
+        if fr_id is not None:
+            start_fr = int(fr_id)
+            end_fr = int(fr_id)
+
+    if start_fr is None or end_fr is None:
+        if keep_full_if_no_signal:
+            return full_window
+        desired = min(total_frames, max(1, int(min_frames)))
+        center = total_frames // 2
+        start = max(0, center - desired // 2)
+        end = min(total_frames, start + desired)
+        start = max(0, end - desired)
+        return (start, end, False)
+
+    start_fr = int(start_fr)
+    end_fr = int(end_fr)
+    if end_fr < start_fr:
+        start_fr, end_fr = end_fr, start_fr
+
+    # clamp to sequence bounds
+    start_fr = max(0, min(start_fr, total_frames - 1))
+    end_fr = max(0, min(end_fr, total_frames - 1))
+
+    active_len = max(1, end_fr - start_fr + 1)
+    margin = max(1, int(round(active_len * float(margin_ratio))))
+
+    window_start = max(0, start_fr - margin)
+    window_end = min(total_frames - 1, end_fr + margin)
+
+    # enforce minimum retained length
+    desired = min(total_frames, max(1, int(min_frames)))
+    kept_len = window_end - window_start + 1
+    if kept_len < desired:
+        center = (window_start + window_end) // 2
+        half = desired // 2
+        window_start = max(0, center - half)
+        window_end = window_start + desired - 1
+        if window_end >= total_frames:
+            window_end = total_frames - 1
+            window_start = max(0, window_end - desired + 1)
+
+    return (window_start, window_end + 1, True)
+
+
+def _slice_sequence_params(smplx_params1: dict, smplx_params2: dict, start: int, end: int):
+    for key in smplx_params1:
+        smplx_params1[key] = smplx_params1[key][start:end]
+        smplx_params2[key] = smplx_params2[key][start:end]
+
+
+def _split_scenario4(val_train_sequences):
+    train = []
+    val = []
+    for sequence in val_train_sequences:
+        sequence = Path(sequence)
+        if "Kick" in sequence.name:
+            val.append(str(sequence))
+        elif "Handshake" in sequence.name:
+            val.append(str(sequence))
+        else:
+            train.append(str(sequence))
+    return train, val
+
+
+def _split_scenario5(val_train_sequences, val_ratio: float, min_contact_edges: int):
+    train = []
+    val = []
+
+    # group by <subject, motion> to keep balanced and avoid cross-split leakage within buckets
+    grouped = defaultdict(list)
+    signature_cache = {}
+    for seq in val_train_sequences:
+        sequence = Path(seq)
+        sbj_name, motion, _ = _sequence_key(sequence)
+        grouped[f"{sbj_name}_{motion}"].append(sequence)
+
+    for key in sorted(grouped.keys()):
+        seqs = sorted(grouped[key], key=lambda x: str(x))
+        n = len(seqs)
+        if n == 1:
+            train.append(str(seqs[0]))
+            continue
+
+        target_val = max(1, int(round(val_ratio * n)))
+        scored = []
+        for seq in seqs:
+            score = _interaction_edges_count(seq, signature_cache)
+            scored.append((seq, score))
+
+        scored.sort(key=lambda x: (-x[1], str(x[0])))
+        strong = [item for item in scored if item[1] >= min_contact_edges]
+        weak = [item for item in scored if item[1] < min_contact_edges]
+
+        selected_val = strong[:target_val]
+        if len(selected_val) < target_val:
+            selected_val.extend(weak[: target_val - len(selected_val)])
+
+        val_set = {str(item[0]) for item in selected_val}
+        for seq in seqs:
+            seq_str = str(seq)
+            if seq_str in val_set:
+                val.append(seq_str)
+            else:
+                train.append(seq_str)
+
+    return train, val
+
 def split(cfg):
 
     # convert to Path
@@ -32,6 +202,10 @@ def split(cfg):
     train = []
     val = []
     test = []
+
+    split_strategy = str(getattr(cfg.chi3d, "split_strategy", "scenario4")).lower()
+    split5_val_ratio = float(getattr(cfg.chi3d, "split5_val_ratio", 0.2))
+    split5_min_contact_edges = int(getattr(cfg.chi3d, "split5_min_contact_edges", 2))
 
     # get path of each sequence: data/raw/chi3d/train/<subj>/smplx/<motion> <index>.json
     sequences = get_sequences_list("chi3d", chi3d_path)
@@ -119,15 +293,39 @@ def split(cfg):
     train and val of different sequences of different motions
     25fps
     '''
-    # choose hug and handshake for val
-    for sequence in val_train:
-        sequence = Path(sequence)
-        if "Kick" in sequence.name:
-            val.append(str(sequence))
-        elif "Handshake" in sequence.name:
-            val.append(str(sequence))
-        else:
-            train.append(str(sequence))
+    if split_strategy == "scenario4":
+        train, val = _split_scenario4(val_train)
+    elif split_strategy == "split5":
+        train, val = _split_scenario5(
+            val_train,
+            val_ratio=split5_val_ratio,
+            min_contact_edges=split5_min_contact_edges,
+        )
+    else:
+        raise ValueError(
+            f"Unknown chi3d.split_strategy='{split_strategy}'. Supported: scenario4, split5"
+        )
+
+    print(
+        f"[CHI3D split] strategy={split_strategy} train={len(train)} val={len(val)} test={len(test)}"
+    )
+
+    if split_strategy == "split5":
+        signature_cache = {}
+
+        def _count_weak(items):
+            weak = 0
+            for seq in items:
+                if _interaction_edges_count(Path(seq), signature_cache) < split5_min_contact_edges:
+                    weak += 1
+            return weak
+
+        weak_train = _count_weak(train)
+        weak_val = _count_weak(val)
+        print(
+            f"[CHI3D split5] min_contact_edges={split5_min_contact_edges} "
+            f"weak_train={weak_train}/{len(train)} weak_val={weak_val}/{len(val)}"
+        )
     
     # print(f"train samples length:{len(train)}")
     # print(f"val samples length:{len(val)}")
@@ -171,12 +369,23 @@ def split(cfg):
         seq_name = f"{sbj_name}_{motion}_{index}"
         split_test.append(seq_name)
 
+    suffix = "" if split_strategy == "scenario4" else f"_{split_strategy}"
+
     with open (assets_path/"chi3d_train.json", "w") as f:
         json.dump(split_train, f, indent=4)
     with open (assets_path/"chi3d_val.json", "w") as f:
         json.dump(split_val, f, indent=4)
     with open (assets_path/"chi3d_test.json", "w") as f:
         json.dump(split_test, f, indent=4)
+
+    # Also write strategy-specific files to avoid accidental overwrite between split variants.
+    if suffix:
+        with open(assets_path / f"chi3d_train{suffix}.json", "w") as f:
+            json.dump(split_train, f, indent=4)
+        with open(assets_path / f"chi3d_val{suffix}.json", "w") as f:
+            json.dump(split_val, f, indent=4)
+        with open(assets_path / f"chi3d_test{suffix}.json", "w") as f:
+            json.dump(split_test, f, indent=4)
         
 
 def preprocess(cfg):
@@ -208,6 +417,21 @@ def preprocess(cfg):
     else:
         sequences = _sequences
         hdf5_name = "dataset"
+
+    split_strategy = str(getattr(cfg.chi3d, "split_strategy", "scenario4")).lower()
+    split5_use_active_window = bool(getattr(cfg.chi3d, "split5_use_active_window", True))
+    split5_window_margin_ratio = float(getattr(cfg.chi3d, "split5_window_margin_ratio", 0.2))
+    split5_window_min_frames = int(getattr(cfg.chi3d, "split5_window_min_frames", 64))
+    split5_keep_full_if_no_signal = bool(getattr(cfg.chi3d, "split5_keep_full_if_no_signal", True))
+    split5_signature_cache = {}
+
+    if split_strategy == "split5" and split5_use_active_window:
+        print(
+            "[CHI3D split5-window] "
+            f"enabled margin_ratio={split5_window_margin_ratio} "
+            f"min_frames={split5_window_min_frames} "
+            f"keep_full_if_no_signal={split5_keep_full_if_no_signal}"
+        )
     if cfg.chi3d.downsample == "10fps":
         hdf5_name += "_10fps"
     elif cfg.chi3d.downsample == "1fps":
@@ -261,6 +485,24 @@ def preprocess(cfg):
             smplx_params2[param] = np.array(params[param][1])
 
         T_original = len(params["transl"][0])
+
+        if split_strategy == "split5" and split5_use_active_window and cfg.chi3d.split in ["train", "val", "test"]:
+            window_start, window_end, has_signal = _compute_split5_active_window(
+                sequence=sequence,
+                total_frames=T_original,
+                signature_cache=split5_signature_cache,
+                margin_ratio=split5_window_margin_ratio,
+                min_frames=split5_window_min_frames,
+                keep_full_if_no_signal=split5_keep_full_if_no_signal,
+            )
+            if window_start != 0 or window_end != T_original:
+                _slice_sequence_params(smplx_params1, smplx_params2, window_start, window_end)
+            T_windowed = smplx_params1["transl"].shape[0]
+            tqdm.tqdm.write(
+                f"[CHI3D split5-window] {seq_name}: signal={has_signal} "
+                f"raw={T_original} kept={T_windowed} range=[{window_start},{window_end})"
+            )
+            T_original = T_windowed
 
         #print("load subject smpl param done")
         #print(f"T_original:{T_original}")

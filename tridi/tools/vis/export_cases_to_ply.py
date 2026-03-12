@@ -92,7 +92,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--samples_dir", type=str, required=True)
     parser.add_argument("--dataset_root", type=str, required=True)
     parser.add_argument("--cases_json", type=str, default="")
-    parser.add_argument("--mode", type=str, default="10", choices=["10", "01", "11"])
+    parser.add_argument("--mode", type=str, default="10")
     parser.add_argument("--k_preds", type=int, default=3)
     parser.add_argument(
         "--rep_strategy",
@@ -155,6 +155,26 @@ def _parse_args() -> argparse.Namespace:
         help="Datasets for eval dataloader build. Supports comma-separated or JSON list (default: chi3d).",
     )
     return parser.parse_args()
+
+
+def _normalize_human_mode(mode: str) -> str:
+    """
+    Export mode controls which human branch to rank/select:
+      - 10: sbj
+      - 01: second_sbj
+      - 11: both (average)
+    Accepts 3-bit sample modes (100/010/110/111) by dropping interaction bit.
+    """
+    mode = str(mode).strip()
+    if mode.startswith("sample_"):
+        mode = mode.split("sample_", 1)[1]
+    if any(ch not in {"0", "1"} for ch in mode):
+        raise ValueError(f"Unsupported --mode='{mode}'. Use 10/01/11 or 3-bit equivalents.")
+    if len(mode) == 3:
+        mode = mode[:2]
+    if mode not in {"10", "01", "11"}:
+        raise ValueError(f"Unsupported --mode='{mode}'. Use 10/01/11 or 3-bit equivalents.")
+    return mode
 
 
 def _infer_run_name_from_samples_dir(samples_dir: Path) -> str:
@@ -936,6 +956,7 @@ def main() -> None:
         format="[%(asctime)s] [%(levelname)s] %(name)s: %(message)s",
     )
     args = _parse_args()
+    args.mode = _normalize_human_mode(args.mode)
 
     try:
         smplx_model_dir = _resolve_smplx_model_dir(args.smplx_model_dir)

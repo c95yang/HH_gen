@@ -33,10 +33,12 @@ class TriDiModelOutput:
     second_sbj_global: Optional[Tensor] = None
     second_sbj_pose: Optional[Tensor] = None
     second_sbj_c: Optional[Tensor] = None
+    interaction_latent: Optional[Tensor] = None
 
     # timesteps
     timesteps_sbj: Optional[Tensor] = None
     timesteps_second_sbj: Optional[Tensor] = None
+    timesteps_interaction: Optional[Tensor] = None
 
     # posed meshes for loss computation
     sbj_vertices: Optional[Tensor] = None
@@ -136,6 +138,9 @@ class BaseTriDiModel(ModelMixin):
         cg_apply: bool = False,
         cg_scale: float = 0.0,
         cg_t_stamp: int = 200,
+        # optional third diffusion modality
+        data_interaction_channels: int = 0,
+        use_interaction_diffusion: bool = False,
     ):
         super().__init__()
 
@@ -148,15 +153,26 @@ class BaseTriDiModel(ModelMixin):
         # sbj_shape, sbj_global_pose, sbj_pose, sbj_c, obj_pose
         self.data_sbj_channels = data_sbj_channels
         self.data_second_sbj_channels = data_second_sbj_channels
+        self.data_interaction_channels = data_interaction_channels
+        self.use_interaction_diffusion = use_interaction_diffusion
         self.data_channels = self.data_sbj_channels + self.data_second_sbj_channels
+        if self.use_interaction_diffusion:
+            self.data_channels += self.data_interaction_channels
 
         # Output size
         self.out_channels = self.data_channels
 
         # Create conditioning model
-        self.conditioning_model = ConditioningModel(
-            **OmegaConf.to_container(conditioning_model_config, resolve=True)
-        )
+        conditioning_kwargs = OmegaConf.to_container(conditioning_model_config, resolve=True)
+        conditioning_kwargs["target_data_channels"] = self.data_channels
+        conditioning_kwargs["interaction_latent_channels"] = self.data_interaction_channels
+        self.conditioning_model = ConditioningModel(**conditioning_kwargs)
+
+        if self.use_interaction_diffusion and (not self.conditioning_model.use_interaction_conditioning):
+            raise ValueError(
+                "use_interaction_diffusion=True requires model_conditioning.use_interaction_conditioning=True "
+                "to construct interaction latent state."
+            )
 
         # Create denoising model for processing parameters at each diffusion step
         self.denoising_model = DenoisingModel(
@@ -164,6 +180,7 @@ class BaseTriDiModel(ModelMixin):
             dim_timestep_embed=denoising_model_config.dim_timestep_embed,
             dim_sbj=self.data_sbj_channels,
             dim_second_sbj=self.data_second_sbj_channels,
+            dim_interaction=self.data_interaction_channels if self.use_interaction_diffusion else 0,
             dim_output=self.out_channels,
             cond_channels=self.conditioning_model.cond_channels,
             # name, dim_timestep_embed, dim_hidden, num_layers
@@ -197,6 +214,8 @@ class BaseTriDiModel(ModelMixin):
         batch: Optional[HHBatchData] = None,
         sbj_gender: Optional[Tensor] = None,
         second_sbj_gender: Optional[Tensor] = None,
+        interaction_label: Optional[Tensor] = None,
+        enable_interaction_conditioning: bool = True,
     ):
         fn = self.conditioning_model.get_input_with_conditioning
         sig = inspect.signature(fn)
@@ -228,11 +247,19 @@ class BaseTriDiModel(ModelMixin):
                 sbj_gender = batch.sbj_gender
             if second_sbj_gender is None and hasattr(batch, "second_sbj_gender"):
                 second_sbj_gender = batch.second_sbj_gender
+            if interaction_label is None and hasattr(batch, "interaction_label"):
+                interaction_label = batch.interaction_label
 
         if sbj_gender is not None and "sbj_gender" in params:
             kwargs["sbj_gender"] = sbj_gender
         if second_sbj_gender is not None and "second_sbj_gender" in params:
             kwargs["second_sbj_gender"] = second_sbj_gender
+        if interaction_label is not None and "interaction_label" in params:
+            kwargs["interaction_label"] = interaction_label
+        if batch is not None and "batch" in params:
+            kwargs["batch"] = batch
+        if "enable_interaction_conditioning" in params:
+            kwargs["enable_interaction_conditioning"] = enable_interaction_conditioning
 
         return fn(x_t, **kwargs)
 
@@ -252,11 +279,14 @@ class BaseTriDiModel(ModelMixin):
             #     print(f"  {key}: {value.shape if isinstance(value, torch.Tensor) else value}")
 
         if mode == 'train':
-            sbj, second_sbj = self.merge_input(batch)
+            merged = self.merge_input(batch)
+            sbj, second_sbj = merged[0], merged[1]
+            interaction = merged[2] if len(merged) > 2 else None
 
             return self.forward_train(
                 sbj=sbj.to(self.device),
                 second_sbj=second_sbj.to(self.device),
+                interaction=None if interaction is None else interaction.to(self.device),
                 batch=batch, 
                 **kwargs
             )
@@ -271,9 +301,15 @@ class BaseTriDiModel(ModelMixin):
 
     def merge_input(self, batch):
         sbj, second_sbj = self.merge_input_sbj(batch)
-        #obj = self.merge_input_obj(batch)
+        if self.use_interaction_diffusion:
+            interaction = self.conditioning_model.get_interaction_latent(
+                batch=batch,
+                device=self.device,
+                latent_dim=self.data_interaction_channels,
+            )
+            return sbj, second_sbj, interaction
 
-        return sbj, second_sbj #, obj
+        return sbj, second_sbj
 
     @staticmethod
     def merge_input_sbj(batch):

@@ -49,6 +49,10 @@ class Evaluator:
         # print("Base samples folder:", base_samples_folder)
         use_gt_global_for_samples = bool(getattr(self.cfg.eval, "use_gt_global_for_samples", False))
         pose_only_like_baseline = bool(getattr(self.cfg.eval, "pose_only_like_baseline", False))
+        sampling_targets = list(getattr(self.cfg.eval, "sampling_target", []) or [])
+        if len(sampling_targets) == 0:
+            sampling_targets = ["sbj", "second_sbj"]
+            logger.info("eval.sampling_target is empty -> defaulting to ['sbj', 'second_sbj']")
 
         rows: List[Dict[str, Any]] = []
         exp_name = str(self.cfg.run.name)
@@ -69,7 +73,7 @@ class Evaluator:
                 logger.info(f"\ton {dataset}")
                 samples_folder = base_samples_folder / dataset
 
-                for sample_target in self.cfg.eval.sampling_target:
+                for sample_target in sampling_targets:
                     logger.info(f"\t  sampling target: {sample_target}")
                     metrics = {"1-NNA": [], "COV": [], "MMD": [], "SD": []}
                     samples_files = list(samples_folder.glob(f"{sample_target}/samples_rep_*.hdf5"))
@@ -121,7 +125,7 @@ class Evaluator:
                             })
         if getattr(self.cfg.eval, "sanity_gt_train_test", False):
             for dataset in self.cfg.run.datasets:
-                for sample_target in self.cfg.eval.sampling_target:
+                for sample_target in sampling_targets:
                     acc = generation.sanity_nna_gt_train_vs_test(
                         self.cfg, dataset=dataset, sample_target=sample_target, max_per_split=5000
                     )
@@ -131,7 +135,7 @@ class Evaluator:
         if getattr(self.cfg.eval, "sanity_gt_test_test", False):
             logger.info("Running sanity: GT(test) vs GT(test) split-half 1-NNA")
             for dataset in self.cfg.run.datasets:
-                for sample_target in self.cfg.eval.sampling_target:
+                for sample_target in sampling_targets:
                     val = generation.sanity_gt_test_test_1nna(
                         self.cfg,
                         reference_dataset=dataset,
@@ -152,7 +156,7 @@ class Evaluator:
                 logger.info(f"\ton {dataset}")
                 samples_folder = base_samples_folder / dataset
 
-                for sample_target in self.cfg.eval.sampling_target:
+                for sample_target in sampling_targets:
                     if sample_target == "sbj" or sample_target == "second_sbj":
                         samples_files = list(samples_folder.glob(f"{sample_target}/samples_rep_*.hdf5"))
                         metrics = {f"{sample_target}_MPJPE": [], f"{sample_target}_MPJPE_PA": []}

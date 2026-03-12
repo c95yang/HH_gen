@@ -86,13 +86,33 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--samples_dir", type=str, required=True)
     parser.add_argument("--dataset_root", type=str, required=True)
     parser.add_argument("--split", type=str, default="test")
-    parser.add_argument("--mode", type=str, default="10", choices=["10", "01", "11"])
+    parser.add_argument("--mode", type=str, default="10")
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--n_random", type=int, default=10)
     parser.add_argument("--n_best", type=int, default=5)
     parser.add_argument("--n_worst", type=int, default=5)
     parser.add_argument("--max_eval", type=int, default=-1)
     return parser.parse_args()
+
+
+def _normalize_human_mode(mode: str) -> str:
+    """
+    Visualization scoring mode uses only human branches:
+      - 10: sbj
+      - 01: second_sbj
+      - 11: both (average)
+    Accepts 3-bit sample modes (e.g., 100/010/110/111) by dropping interaction bit.
+    """
+    mode = str(mode).strip()
+    if mode.startswith("sample_"):
+        mode = mode.split("sample_", 1)[1]
+    if any(ch not in {"0", "1"} for ch in mode):
+        raise ValueError(f"Unsupported --mode='{mode}'. Use 10/01/11 or 3-bit equivalents.")
+    if len(mode) == 3:
+        mode = mode[:2]
+    if mode not in {"10", "01", "11"}:
+        raise ValueError(f"Unsupported --mode='{mode}'. Use 10/01/11 or 3-bit equivalents.")
+    return mode
 
 
 def _find_rep_files(samples_dir: Path) -> List[Path]:
@@ -227,6 +247,7 @@ def main() -> None:
         format="[%(asctime)s] [%(levelname)s] %(name)s: %(message)s",
     )
     args = _parse_args()
+    args.mode = _normalize_human_mode(args.mode)
 
     samples_dir = Path(args.samples_dir)
     dataset_root = Path(args.dataset_root)

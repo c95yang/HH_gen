@@ -54,6 +54,8 @@ def get_train_dataloader(cfg: ProjectConfig):
             fps=dataset_config.fps_train,
             max_timestamps=getattr(dataset_config, "max_timestamps", None),
             filter_subjects=getattr(dataset_config, "filter_subjects", None),
+            interaction_source=cfg.model_conditioning.interaction_source,
+            interaction_raw_root=Path(cfg.env.raw_datasets_folder) / dataset_config.name,
             **train_kwargs
         )
 
@@ -69,6 +71,8 @@ def get_train_dataloader(cfg: ProjectConfig):
             fps=dataset_config.fps_eval,
             max_timestamps=getattr(dataset_config, "max_timestamps", None),
             filter_subjects=getattr(dataset_config, "filter_subjects", None),
+            interaction_source=cfg.model_conditioning.interaction_source,
+            interaction_raw_root=Path(cfg.env.raw_datasets_folder) / dataset_config.name,
             **val_kwargs
         )
 
@@ -153,6 +157,8 @@ def get_eval_dataloader(cfg: ProjectConfig):
                 fps=dataset_config.fps_eval,
                 max_timestamps=dataset_config.max_timestamps,
                 filter_subjects=dataset_config.filter_subjects,
+                interaction_source=cfg.model_conditioning.interaction_source,
+                interaction_raw_root=Path(cfg.env.raw_datasets_folder) / dataset_config.name,
                 split_file=split_file,
             )
         else:

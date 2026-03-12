@@ -1,12 +1,12 @@
 chi3d:
-  fps_train: 25
-  fps_eval: 25
+  fps_train: 10
+  fps_eval: 10
   augment_rotation: false
   augment_symmetry: false
-  root: data/preprocessed/chi3d_smplx
-  train_split_file: data/preprocessed/chi3d_smplx/chi3d_train.json
-  val_split_file: data/preprocessed/chi3d_smplx/chi3d_val.json
-  test_split_file: data/preprocessed/chi3d_smplx/chi3d_test.json
+  root: /media/uv/Data/workspace/HH_gen/tridi/data/preprocessed/chi3d_smplx
+  train_split_file: /media/uv/Data/workspace/HH_gen/tridi/data/preprocessed/chi3d_smplx/chi3d_train.json
+  val_split_file: /media/uv/Data/workspace/HH_gen/tridi/data/preprocessed/chi3d_smplx/chi3d_val.json
+  test_split_file: /media/uv/Data/workspace/HH_gen/tridi/data/preprocessed/chi3d_smplx/chi3d_test.json
 model_denoising:
   name: transformer_unidiffuser_3
   dim_timestep_embed: 128
@@ -18,6 +18,8 @@ model_denoising:
 model:
   data_sbj_channels: 325
   data_second_sbj_channels: 325
+  data_interaction_channels: 128
+  use_interaction_diffusion: true
   denoise_mode: sample
   beta_start: 1.0e-05
   beta_end: 0.008
@@ -25,12 +27,25 @@ model:
 model_conditioning:
   use_gender_conditioning: true
   num_genders: 2
+  use_interaction_conditioning: true
+  interaction_source: both  # seq_name | video_name | both
+  clip_model_name: ViT-B/32
+  interaction_embed_dim: null  # inferred from CLIP when enabled
+  use_interaction_contact_signature: false
+  signature_path: null  # optional; auto-resolve from raw chi3d root when null
+  # interaction_prompts:
+  #   Grab: "Two people are interacting while one person grabs the other."
+  #   Handshake: "Two people are performing a handshake."
+  #   Hit: "Two people are interacting and one person hits the other."
+  #   Push: "Two people are interacting and one person pushes the other."
+  #   HoldingHands: "Two people are holding hands while interacting."
+  #   Posing: "Two people are posing together."
 run:
   datasets:
   - chi3d
 dataloader:
   batch_size: 1024
-  workers: 12
+  workers: 8
   sampler: weighted
 train:
   mixed_precision: 'no'
@@ -41,7 +56,7 @@ train:
   early_stop: true
   early_stop_metric: "VAL_loss/total"
   early_stop_mode: "min"
-  early_stop_patience: 8
+  early_stop_patience: 500
   early_stop_min_delta: 0.0
   early_stop_warmup_epochs: 1
   early_stop_save_best: true
@@ -49,6 +64,7 @@ train:
   losses:
     denoise_1: 10.0
     denoise_2: 10.0
+    denoise_interaction: 5.0
     smpl_v2v: 30.0
     second_smpl_v2v: 30.0
 optimizer:
@@ -75,5 +91,6 @@ sample:
 eval:
   # Fair NNBaseline-style generation metrics: NN features use pose+shape only
   pose_only_like_baseline: false
+  sampling_target: [sbj, second_sbj]
 #python main.py -c config/env.yaml scenarios/chi3d.yaml -- run.name=chi3d run.job=train
 

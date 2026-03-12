@@ -73,10 +73,11 @@ class Sampler:
         batch.second_sbj_gender = (g2 == 1)
 
         # 3) pass gender to the model (conditioning)
+        mode_bits = self._normalize_sample_mode(self.cfg.sample.mode, self.cfg.model.use_interaction_diffusion)
         result = self.model(
             batch,
             "sample",
-            sample_type=self.cfg.sample.mode,
+            sample_type=mode_bits,
             sbj_gender=g1,                 # long OK
             second_sbj_gender=g2,          # long OK
         )
@@ -115,12 +116,66 @@ class Sampler:
         raise ValueError(f"Unknown gender spec: {spec}")
 
     @staticmethod
+    def _normalize_sample_mode(mode: str, use_interaction_diffusion: bool) -> str:
+        """
+        Normalize sampling mode into bit-string format.
+        Supports legacy aliases like "sample_01".
+        Returns:
+          - 2-bit mode when interaction diffusion is OFF
+          - 3-bit mode when interaction diffusion is ON
+        """
+        required_len = 3 if use_interaction_diffusion else 2
+        octal_coercion_map = {
+            int(format(i, f"0{required_len}b"), 8): format(i, f"0{required_len}b")
+            for i in range(2 ** required_len)
+        }
+
+        # Robustness: OmegaConf/dotlist can coerce leading-zero modes
+        # (e.g. 010 -> 8, 001 -> 1). Recover original bit-strings when possible.
+        if isinstance(mode, int):
+            iv = int(mode)
+            if iv in octal_coercion_map:
+                mode = octal_coercion_map[iv]
+            else:
+                mode = str(iv)
+        else:
+            mode = str(mode).strip()
+
+        if mode.startswith("sample_"):
+            mode = mode.split("sample_", 1)[1]
+
+        if not mode or any(ch not in {"0", "1"} for ch in mode):
+            raise ValueError(
+                f"Invalid sample.mode='{mode}'. Expected bit string like 10/01/11/111. "
+                f"For leading-zero modes, pass string literal: sample.mode='\"010\"'."
+            )
+
+        # Additional robustness for plain numeric coercion (e.g. 1 -> 001)
+        if len(mode) < required_len:
+            mode = mode.zfill(required_len)
+
+        if len(mode) == 2:
+            if use_interaction_diffusion:
+                return mode + "0"
+            return mode
+
+        if len(mode) == 3:
+            if use_interaction_diffusion:
+                return mode
+            return mode[:2]
+
+        raise ValueError(f"Invalid sample.mode length for '{mode}'. Use 2 or 3 bits.")
+
+    @staticmethod
     def sample_mode_to_str(sample_mode, contacts_mode):
+        sample_mode = str(sample_mode)
         sample_str = []
         if sample_mode[0] == "1":
             sample_str.append("sbj")
         if sample_mode[1] == "1":
             sample_str.append("second_sbj")
+        if len(sample_mode) > 2 and sample_mode[2] == "1":
+            sample_str.append("interaction")
         sample_str = "_".join(sample_str)
 
         return sample_str
@@ -142,7 +197,8 @@ class Sampler:
                 f'    Number of samples: {len(dataloader.dataset)}\n'
             )
             # create folder for the samples
-            sample_mode = self.sample_mode_to_str(self.cfg.sample.mode, self.cfg.sample.contacts_mode)
+            mode_bits = self._normalize_sample_mode(self.cfg.sample.mode, self.cfg.model.use_interaction_diffusion)
+            sample_mode = self.sample_mode_to_str(mode_bits, self.cfg.sample.contacts_mode)
             samples_folder = self.base_samples_folder / f"{dataloader.dataset.name}" / f"{sample_mode}"
             samples_folder.mkdir(parents=True, exist_ok=True)
 
@@ -160,7 +216,7 @@ class Sampler:
                             retrieved_output, batch.scale, batch.sbj_gender, batch.second_sbj_gender
                         )
 
-                    sample_mode = self.cfg.sample.mode
+                    sample_mode = mode_bits
                     is_baseline = getattr(self.cfg.run, "job", None) == "baseline"
                     for sample_idx in range(len(sbj_meshes)):
                         sbj = batch.sbj[sample_idx]
@@ -212,7 +268,8 @@ class Sampler:
                 f'    Number of samples: {len(dataloader.dataset)}\n'
             )
             # create folder for the samples
-            sample_mode = self.sample_mode_to_str(self.cfg.sample.mode, self.cfg.sample.contacts_mode)
+            mode_bits = self._normalize_sample_mode(self.cfg.sample.mode, self.cfg.model.use_interaction_diffusion)
+            sample_mode = self.sample_mode_to_str(mode_bits, self.cfg.sample.contacts_mode)
             samples_folder = self.base_samples_folder / f"{dataloader.dataset.name}" / f"{sample_mode}"
             samples_folder.mkdir(parents=True, exist_ok=True)
 

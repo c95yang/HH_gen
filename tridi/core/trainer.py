@@ -1,8 +1,10 @@
 from collections import defaultdict
 from pathlib import Path
+import json
 import math
 import sys
 import time
+from typing import Optional
 
 import torch
 import numpy as np
@@ -73,6 +75,7 @@ class Trainer:
         self.es_best = float("inf") if self.es_mode == "min" else -float("inf")
         self.es_bad_epochs = 0
         self.es_best_step = None  # type: Optional[int]
+        self._shape_and_loss_keys_logged = False
 
         # try restore early-stop state from resume checkpoint (if exists)
         self._restore_early_stop_state_from_checkpoint()
@@ -90,6 +93,34 @@ class Trainer:
         p = self._best_ptr_path()
         p.write_text(str(ckpt_path.name) + "\n", encoding="utf-8")
         logger.info(f"[EarlyStop] Updated best pointer: {p} -> {ckpt_path.name}")
+
+    def _write_early_stop_metadata(self):
+        """Write lightweight early-stop state without creating a full checkpoint file."""
+        ckpt_dir = Path(self.cfg.run.path) / "checkpoints"
+        ckpt_dir.mkdir(parents=True, exist_ok=True)
+        metadata_path = ckpt_dir / "early_stop_state.json"
+        payload = {
+            "metric": self.es_metric,
+            "mode": self.es_mode,
+            "best": float(self.es_best),
+            "best_step": self.es_best_step,
+            "bad_epochs": int(self.es_bad_epochs),
+            "patience": int(self.es_patience),
+            "min_delta": float(self.es_min_delta),
+            "warmup_epochs": int(self.es_warmup_epochs),
+        }
+        metadata_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+
+    def _is_periodic_ckpt_step(self) -> bool:
+        freq = int(self.cfg.train.checkpoint_freq)
+        if freq <= 0:
+            return False
+        return (self.train_state.step % freq) == 0
+
+    def _checkpoint_path_for_step(self, step: int) -> Path:
+        checkpoint_name = f'checkpoint-step-{step:07d}.pth'
+        checkpoint_dir = Path(self.cfg.run.path) / 'checkpoints'
+        return checkpoint_dir / checkpoint_name
 
     def _restore_early_stop_state_from_checkpoint(self):
         if not self.es_enabled:
@@ -148,14 +179,19 @@ class Trainer:
             self.es_bad_epochs = 0
             self.es_best_step = int(self.train_state.step)
             logger.info(f"[EarlyStop] Improved {self.es_metric}={current:.6f} (best). step={self.train_state.step}")
+            self._write_early_stop_metadata()
 
             if self.es_save_best:
-                # Save a normal step checkpoint (name stays checkpoint-step-XXXXXXX.pth)
-                ckpt_path = self.save_checkpoint()
-                self._write_best_pointer(ckpt_path)
+                # Do not create extra numbered checkpoints on improvement.
+                # If current step is already a periodic checkpoint step, update pointer to that file.
+                if self._is_periodic_ckpt_step():
+                    ckpt_path = self._checkpoint_path_for_step(self.train_state.step)
+                    if ckpt_path.exists():
+                        self._write_best_pointer(ckpt_path)
 
         else:
             self.es_bad_epochs += 1
+            self._write_early_stop_metadata()
             logger.info(
                 f"[EarlyStop] No improve {self.es_metric}={current:.6f}, best={self.es_best:.6f}. "
                 f"bad_epochs={self.es_bad_epochs}/{self.es_patience}"
@@ -165,8 +201,9 @@ class Trainer:
                     f"[EarlyStop] Patience exhausted -> stop. "
                     f"epoch={self.train_state.epoch}, step={self.train_state.step}"
                 )
-                # Always save final checkpoint at stopping point
-                self.save_checkpoint()
+                # Save one final numbered checkpoint only if this is not already a periodic checkpoint step.
+                if not self._is_periodic_ckpt_step():
+                    self.save_checkpoint()
                 if self.cfg.logging.wandb:
                     wandb.finish()
                 time.sleep(2)
@@ -190,6 +227,14 @@ class Trainer:
         denoise_loss, aux_output = self.model(batch, 'train', return_intermediate_steps=True)
         output = self.model.split_output(aux_output[3], aux_output)
 
+        if not self._shape_and_loss_keys_logged:
+            logger.info(
+                "[SmokeCheck] model_pred_shape=%s denoise_loss_keys=%s",
+                tuple(aux_output[3].shape),
+                sorted(list(denoise_loss.keys())),
+            )
+            self._shape_and_loss_keys_logged = True
+
         sbj_vertices, sbj_joints, second_sbj_vertices, second_sbj_joints = self.mesh_model.get_meshes_wkpts_th(
             output,
             scale=batch.scale,
@@ -206,7 +251,8 @@ class Trainer:
 
     def compute_loss(self, batch: HHBatchData, output: TriDiModelOutput, denoise_loss):
         wandb_log = dict()
-        loss = 0.0
+        loss_device = self.model.device
+        loss = torch.zeros((), device=loss_device)
 
         for key, weight in self.cfg.train.losses.items():
             if key == "smpl_v2v":
@@ -217,14 +263,26 @@ class Trainer:
                 gt_second_sbj_vertices = batch.second_sbj_vertices.to(output.second_sbj_vertices.device)
                 pred_second_sbj_vertices = output.second_sbj_vertices
                 loss_i = F.mse_loss(pred_second_sbj_vertices, gt_second_sbj_vertices, reduction='none')
-            elif key.startswith("denoise"):
+            elif key.startswith("denoise") or key.startswith("interaction_proto"):
+                if key not in denoise_loss:
+                    logger.warning(f"Requested loss '{key}' is not available for current model mode. Skipping.")
+                    continue
                 loss_i = denoise_loss[key]
             else:
                 raise NotImplementedError(f"No implementation for {key} loss.")
 
+            if torch.is_tensor(loss_i):
+                loss_i = loss_i.to(loss_device)
             loss_i = loss_i.mean()
             loss = loss + float(weight) * loss_i
             wandb_log[f'loss/{key}'] = loss_i.detach().cpu().item()
+
+        for key in ["interaction_proto_acc_pred", "interaction_proto_acc_target", "interaction_proto_num_valid"]:
+            if key in denoise_loss:
+                value = denoise_loss[key]
+                if torch.is_tensor(value):
+                    value = value.detach().cpu().item()
+                wandb_log[f'aux/{key}'] = float(value)
 
         wandb_log["loss/total"] = float(loss.detach().cpu().item())
         return loss, wandb_log

@@ -19,6 +19,27 @@ class ConditioningModelConfig:
     use_gender_conditioning: bool = False
     num_genders: int = 2
 
+    # Interaction prior conditioning (disabled by default)
+    use_interaction_conditioning: bool = False
+    interaction_source: str = "both"  # "seq_name" | "video_name" | "both"
+    interaction_prompts: Dict[str, str] = field(default_factory=lambda: {
+        "Grab": "Two people are interacting while one person grabs the other.",
+        "Handshake": "Two people are performing a handshake.",
+        "Hit": "Two people are interacting and one person hits the other.",
+        "Push": "Two people are interacting and one person pushes the other.",
+        "HoldingHands": "Two people are holding hands while interacting.",
+        "Posing": "Two people are posing together.",
+        "Hug": "Two people are hugging each other.",
+        "Kick": "Two people are interacting and one person kicks the other.",
+        "Unknown": "Two people are interacting.",
+    })
+    use_interaction_contact_signature: bool = False
+    signature_path: Optional[str] = None
+    clip_model_name: str = "ViT-B/32"
+    interaction_embed_dim: Optional[int] = None
+    interaction_proto_temperature: float = 0.07
+    interaction_proto_normalize: bool = True
+
 @dataclass
 class DenoisingModelConfig:
     name: str = "transformer" "_" + "unidiffuser_3"  # 'simple','transformer' x "joint", "unidiffuser"
@@ -33,6 +54,8 @@ class TriDiModelConfig:
     data_second_sbj_channels: int = 10 + 52 * 6 + 3
     #data_obj_channels: int = 3 + 6
     #data_contact_channels: int = 128  # 256 for surface, 24 for parts
+    data_interaction_channels: int = 128
+    use_interaction_diffusion: bool = False
 
     # diffusion
     denoise_mode: str = 'sample'  # epsilon or sample (as in scheduler - prediction_type)

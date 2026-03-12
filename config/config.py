@@ -108,7 +108,7 @@ class SampleConfig:
     num_inference_steps: int = 1000
     c: Optional[str] = 'ddpm_guided'
     split: str = "test"   # train / val / test
-    mode: str = "11"  # ('sbj', 'second_sbj')
+    mode: str = "11"  # ('sbj', 'second_sbj', optional 'interaction' as third bit)
     contacts_mode: str = 'heatmap'  # 'heatmap', 'clip'
 
     num_samples: int = 100

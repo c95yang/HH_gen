@@ -71,6 +71,21 @@ class PreprocessCHI3DConfig:
     # Path to a split_file (for selecting sequences based on split)
     split_file: str = os.path.join("${chi3d.root}", "split.json")
     downsample: str = "10fps" # "None", "50fps", "10fps", "1fps"
+    # Split strategy used to generate split.json and asset lists.
+    # Supported: "scenario4" (legacy), "split5" (interaction-aware, reduced weak edges).
+    split_strategy: str = "scenario4"
+    # split5: per <subject, motion> validation ratio sampled from non-test sequences.
+    split5_val_ratio: float = 0.2
+    # split5: interactions with fewer edges than this are considered weak.
+    split5_min_contact_edges: int = 2
+    # split5: enable frame-level active-window filtering using interaction signatures.
+    split5_use_active_window: bool = True
+    # split5: margin around active window, expressed as a ratio of active length.
+    split5_window_margin_ratio: float = 0.2
+    # split5: minimum kept frames after windowing (before downsampling).
+    split5_window_min_frames: int = 64
+    # split5: if no frame-level signal is found for a sequence, keep full sequence.
+    split5_keep_full_if_no_signal: bool = True
 
 @dataclass
 class PreprocessGrabConfig:

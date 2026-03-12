@@ -24,29 +24,34 @@ class TriDiModel(BaseTriDiModel):
         super().__init__(**kwargs)
 
         self.scheduler_aux_1 = deepcopy(self.schedulers_map['ddpm'])  # auxiliary scheduler for second subject
+        self.scheduler_aux_2 = deepcopy(self.schedulers_map['ddpm']) if self.use_interaction_diffusion else None
         trange = torch.arange(1, self.scheduler.config.num_train_timesteps, dtype=torch.long)
         tzeros = torch.zeros_like(trange)
-        # self.sparse_timesteps = torch.cat([
-        #     torch.stack([tzeros, trange, trange], dim=1),
-        #     torch.stack([trange, tzeros, trange], dim=1),
-        #     torch.stack([trange, trange, tzeros], dim=1),
-        #     torch.stack([trange, trange, trange], dim=1),
-        #     torch.stack([tzeros, tzeros, trange], dim=1),
-        #     torch.stack([tzeros, trange, tzeros], dim=1),
-        #     torch.stack([trange, tzeros, tzeros], dim=1),
-        # ])
-        self.sparse_timesteps = torch.cat([
-            torch.stack([tzeros, trange], dim=1),
-            torch.stack([trange, tzeros], dim=1),
-            torch.stack([trange, trange], dim=1),
-            torch.stack([tzeros, tzeros], dim=1)
-        ])
+        if self.use_interaction_diffusion:
+            self.sparse_timesteps = torch.cat([
+                torch.stack([tzeros, trange, trange], dim=1),
+                torch.stack([trange, tzeros, trange], dim=1),
+                torch.stack([trange, trange, tzeros], dim=1),
+                torch.stack([trange, trange, trange], dim=1),
+                torch.stack([tzeros, tzeros, trange], dim=1),
+                torch.stack([tzeros, trange, tzeros], dim=1),
+                torch.stack([trange, tzeros, tzeros], dim=1),
+                torch.stack([tzeros, tzeros, tzeros], dim=1),
+            ])
+        else:
+            self.sparse_timesteps = torch.cat([
+                torch.stack([tzeros, trange], dim=1),
+                torch.stack([trange, tzeros], dim=1),
+                torch.stack([trange, trange], dim=1),
+                torch.stack([tzeros, tzeros], dim=1)
+            ])
 
 
     def forward_train(
         self,
         sbj: Tensor,
         second_sbj: Tensor,
+        interaction: Optional[Tensor] = None,
         return_intermediate_steps: bool = False,
         batch: Optional[HHBatchData] = None,
         **kwargs
@@ -58,21 +63,40 @@ class TriDiModel(BaseTriDiModel):
         # Sample random noise
         noise_sbj = torch.randn_like(sbj)
         noise_second_sbj = torch.randn_like(second_sbj)
+        D_interaction = 0
+        if self.use_interaction_diffusion:
+            if interaction is None:
+                interaction = self.conditioning_model.get_interaction_latent(
+                    batch=batch,
+                    device=sbj.device,
+                    latent_dim=self.data_interaction_channels,
+                )
+            D_interaction = interaction.shape[1]
+            noise_interaction = torch.randn_like(interaction)
 
         # Save for auxillary output
-        noise = torch.cat([noise_sbj, noise_second_sbj], dim=1)
-        x_0 = torch.cat([sbj, second_sbj], dim=1)
+        if self.use_interaction_diffusion:
+            noise = torch.cat([noise_sbj, noise_second_sbj, noise_interaction], dim=1)
+            x_0 = torch.cat([sbj, second_sbj, interaction], dim=1)
+        else:
+            noise = torch.cat([noise_sbj, noise_second_sbj], dim=1)
+            x_0 = torch.cat([sbj, second_sbj], dim=1)
         # print("x_0 shape:", x_0.shape)
         
         # sparse sampling
         timestep_indices = torch.randint(0, len(self.sparse_timesteps), (B,), dtype=torch.long)
         timesteps = self.sparse_timesteps[timestep_indices].to(self.device)
         timestep_sbj, timestep_second_sbj = timesteps[:, 0], timesteps[:, 1]
+        timestep_interaction = timesteps[:, 2] if self.use_interaction_diffusion else None
 
         # Add noise to the input
         sbj_t = self.scheduler.add_noise(sbj, noise_sbj, timestep_sbj)
         second_sbj_t = self.scheduler_aux_1.add_noise(second_sbj, noise_second_sbj, timestep_second_sbj)
-        x_t = torch.cat([sbj_t, second_sbj_t], dim=1)
+        if self.use_interaction_diffusion:
+            interaction_t = self.scheduler_aux_2.add_noise(interaction, noise_interaction, timestep_interaction)
+            x_t = torch.cat([sbj_t, second_sbj_t, interaction_t], dim=1)
+        else:
+            x_t = torch.cat([sbj_t, second_sbj_t], dim=1)
 
         # Conditioning
         x_t_input = self.get_input_with_conditioning(
@@ -80,24 +104,62 @@ class TriDiModel(BaseTriDiModel):
             t=timestep_sbj,
             t_aux=timestep_second_sbj,
             batch=batch,
+            enable_interaction_conditioning=not self.use_interaction_diffusion,
         )
 
         # x_t_input = x_t
 
         # Forward
         if self.denoise_mode == 'sample':
-            x_0_pred = self.denoising_model(x_t_input, timestep_sbj, timestep_second_sbj)
+            x_0_pred = self.denoising_model(
+                x_t_input,
+                timestep_sbj,
+                timestep_second_sbj,
+                timestep_interaction,
+            )
+
+            sbj = sbj.to(x_0_pred.device)
+            second_sbj = second_sbj.to(x_0_pred.device)
+            if self.use_interaction_diffusion and interaction is not None:
+                interaction = interaction.to(x_0_pred.device)
 
             # Check
             assert x_0_pred.shape == x_0.shape, f'Input prediction {x_0_pred.shape=} and {x_0.shape=}'
 
             # Loss
-            x_0_pred_sbj, x_0_pred_second_sbj = \
-                x_0_pred[:, :D_sbj], x_0_pred[:, D_sbj:D_sbj + D_second_sbj]
+            x_0_pred_sbj = x_0_pred[:, :D_sbj]
+            x_0_pred_second_sbj = x_0_pred[:, D_sbj:D_sbj + D_second_sbj]
             loss = {
                 "denoise_1": F.l1_loss(x_0_pred_sbj, sbj),
                 "denoise_2": F.l1_loss(x_0_pred_second_sbj, second_sbj)
             }
+            if self.use_interaction_diffusion:
+                x_0_pred_interaction = x_0_pred[:, D_sbj + D_second_sbj:D_sbj + D_second_sbj + D_interaction]
+                loss["denoise_interaction"] = F.l1_loss(x_0_pred_interaction, interaction)
+                interaction = interaction.to(x_0_pred_interaction.device)
+                x_0_pred_interaction = x_0_pred_interaction.to(interaction.device)
+                interaction_labels = getattr(batch, "interaction_label", None) if batch is not None else None
+                proto_pred = self.conditioning_model.compute_interaction_prototype_ce(
+                    interaction_latent=x_0_pred_interaction,
+                    interaction_label=interaction_labels,
+                )
+                proto_target = self.conditioning_model.compute_interaction_prototype_ce(
+                    interaction_latent=interaction,
+                    interaction_label=interaction_labels,
+                )
+                if (proto_pred["loss"] is not None) and (proto_target["loss"] is not None):
+                    loss["interaction_proto_ce_pred"] = proto_pred["loss"]
+                    loss["interaction_proto_ce_target"] = proto_target["loss"]
+                    loss["interaction_proto_ce"] = 0.5 * (proto_pred["loss"] + proto_target["loss"])
+                    loss["interaction_proto_acc_pred"] = torch.tensor(
+                        float(proto_pred["accuracy"]), device=x_0_pred_interaction.device
+                    )
+                    loss["interaction_proto_acc_target"] = torch.tensor(
+                        float(proto_target["accuracy"]), device=x_0_pred_interaction.device
+                    )
+                    loss["interaction_proto_num_valid"] = torch.tensor(
+                        int(proto_pred["num_valid"]), device=x_0_pred_interaction.device
+                    )
             # print("sbj shape:", sbj.shape)
             # print("x_0_pred shape:", x_0_pred.shape)
             # print("x_0_pred_sbj shape:", x_0_pred_sbj.shape)
@@ -110,7 +172,7 @@ class TriDiModel(BaseTriDiModel):
             # x_0_pred_second_sbj shape: torch.Size([64, 325])
 
             # Auxiliary output
-            aux_output = (x_0, x_t, noise, x_0_pred, timestep_sbj, timestep_second_sbj)
+            aux_output = (x_0, x_t, noise, x_0_pred, timestep_sbj, timestep_second_sbj, timestep_interaction)
         else:
             raise NotImplementedError(f'Unknown denoise_mode: {self.denoise_mode}')
 
@@ -194,10 +256,19 @@ class TriDiModel(BaseTriDiModel):
         # Choose noise dimensionality
         D_sbj = self.data_sbj_channels
         D_second_sbj = self.data_second_sbj_channels
+        D_interaction = self.data_interaction_channels if self.use_interaction_diffusion else 0
         D = 0
 
+        if isinstance(mode, str):
+            mode = tuple(mode)
+        mode = list(mode)
+        if self.use_interaction_diffusion and len(mode) == 2:
+            mode.append("0")
+        if (not self.use_interaction_diffusion) and len(mode) > 2:
+            mode = mode[:2]
+
         # sample noise and get conditioning
-        x_sbj_cond, x_second_sbj_cond = torch.empty(0), torch.empty(0)
+        x_sbj_cond, x_second_sbj_cond, x_interaction_cond = torch.empty(0), torch.empty(0), torch.empty(0)
         if mode[0] == "1":
             x_t_sbj = torch.randn(B, D_sbj, device=device)
             D += D_sbj
@@ -213,6 +284,18 @@ class TriDiModel(BaseTriDiModel):
             _, x_second_sbj_cond = self.merge_input_sbj(batch)
             x_second_sbj_cond = x_second_sbj_cond.to(device)
             x_t_second_sbj = x_second_sbj_cond.detach().clone()
+
+        if self.use_interaction_diffusion:
+            x_interaction_cond = self.conditioning_model.get_interaction_latent(
+                batch=batch,
+                device=device,
+                latent_dim=D_interaction,
+            )
+            if mode[2] == "1":
+                x_t_interaction = torch.randn(B, D_interaction, device=device)
+                D += D_interaction
+            else:
+                x_t_interaction = x_interaction_cond.detach().clone()
 
         # if mode[2] == "1": #text condition
         #     x_t_text_condition = torch.randn(B, D_text_condition, device=device)
@@ -247,21 +330,27 @@ class TriDiModel(BaseTriDiModel):
             # Construct input based on sampling mode
             t_sbj = t if mode[0] == "1" else torch.zeros_like(t)
             t_second_sbj = t if mode[1] == "1" else torch.zeros_like(t)
-            
-            _x_t = torch.cat([x_t_sbj, x_t_second_sbj], dim=1)
+            t_interaction = t if (self.use_interaction_diffusion and mode[2] == "1") else torch.zeros_like(t)
+
+            parts = [x_t_sbj, x_t_second_sbj]
+            if self.use_interaction_diffusion:
+                parts.append(x_t_interaction)
+            _x_t = torch.cat(parts, dim=1)
 
             with torch.no_grad():
                 # Conditioning
                 t_sbj_b = t_sbj.reshape(1).expand(B)
                 t_second_sbj_b = t_second_sbj.reshape(1).expand(B)
+                t_interaction_b = t_interaction.reshape(1).expand(B)
 
                 x_t_input = self.get_input_with_conditioning(
                     _x_t, t=t_sbj_b, t_aux=t_second_sbj_b, batch=batch,
                     sbj_gender=sbj_gender,
                     second_sbj_gender=second_sbj_gender,
+                    enable_interaction_conditioning=not self.use_interaction_diffusion,
                 )
 
-                _pred = self.denoising_model(x_t_input, t_sbj_b, t_second_sbj_b)
+                _pred = self.denoising_model(x_t_input, t_sbj_b, t_second_sbj_b, t_interaction_b)
 
 
             # Step
@@ -278,6 +367,8 @@ class TriDiModel(BaseTriDiModel):
                 pred.append(_pred[:, :D_sbj])
             if mode[1] == "1":
                 pred.append(_pred[:, D_sbj:D_sbj + D_second_sbj])
+            if self.use_interaction_diffusion and mode[2] == "1":
+                pred.append(_pred[:, D_sbj + D_second_sbj:D_sbj + D_second_sbj + D_interaction])
             pred = torch.cat(pred, dim=1)
 
             x_t = []
@@ -285,6 +376,8 @@ class TriDiModel(BaseTriDiModel):
                 x_t.append(x_t_sbj)
             if mode[1] == "1":
                 x_t.append(x_t_second_sbj)
+            if self.use_interaction_diffusion and mode[2] == "1":
+                x_t.append(x_t_interaction)
             x_t = torch.cat(x_t, dim=1)
 
             x_t = scheduler.step(pred, t, x_t, **extra_step_kwargs).prev_sample
@@ -302,30 +395,47 @@ class TriDiModel(BaseTriDiModel):
                 x_t_sbj = x_sbj_cond
             if mode[1] == "1":
                 x_t_second_sbj = x_t[:, D_off:D_off + D_second_sbj]
+                D_off += D_second_sbj
             else:
                 x_t_second_sbj = x_second_sbj_cond
+            if self.use_interaction_diffusion:
+                if mode[2] == "1":
+                    x_t_interaction = x_t[:, D_off:D_off + D_interaction]
+                else:
+                    x_t_interaction = x_interaction_cond
 
         # construct final output
-        output = torch.cat([x_t_sbj, x_t_second_sbj], dim=1)
+        if self.use_interaction_diffusion:
+            output = torch.cat([x_t_sbj, x_t_second_sbj, x_t_interaction], dim=1)
+        else:
+            output = torch.cat([x_t_sbj, x_t_second_sbj], dim=1)
 
         return (output, all_outputs) if return_all_outputs else output
 
-    @staticmethod
-    def split_output(x_0_pred, aux_output=None):
+    def split_output(self, x_0_pred, aux_output=None):
+        D_sbj = self.data_sbj_channels
+        D_second_sbj = self.data_second_sbj_channels
+        D_interaction = self.data_interaction_channels if self.use_interaction_diffusion else 0
+
         return TriDiModelOutput(
-        #out = TriDiModelOutput(
             sbj_shape=x_0_pred[:, :10],
             sbj_global=x_0_pred[:, 10:16],
             sbj_pose=x_0_pred[:, 16:16 + 51 * 6],
             sbj_c=x_0_pred[:, 16 + 51 * 6:16 + 51 * 6 + 3],
             
-            second_sbj_shape=x_0_pred[:, 325:325 + 10],
-            second_sbj_global=x_0_pred[:, 325 + 10:325 + 16],
-            second_sbj_pose=x_0_pred[:, 325 + 16:325 + 16 + 51 * 6],
-            second_sbj_c=x_0_pred[:, 325 + 16 + 51 * 6:325 + 16 + 51 * 6 + 3],
+            second_sbj_shape=x_0_pred[:, D_sbj:D_sbj + 10],
+            second_sbj_global=x_0_pred[:, D_sbj + 10:D_sbj + 16],
+            second_sbj_pose=x_0_pred[:, D_sbj + 16:D_sbj + 16 + 51 * 6],
+            second_sbj_c=x_0_pred[:, D_sbj + 16 + 51 * 6:D_sbj + 16 + 51 * 6 + 3],
+
+            interaction_latent=(
+                x_0_pred[:, D_sbj + D_second_sbj:D_sbj + D_second_sbj + D_interaction]
+                if self.use_interaction_diffusion else None
+            ),
             
             timesteps_sbj=aux_output[4] if aux_output is not None else None,
             timesteps_second_sbj=aux_output[5] if aux_output is not None else None,
+            timesteps_interaction=aux_output[6] if aux_output is not None else None,
         )
         # hard-zero translation
         # out.sbj_c = torch.zeros_like(out.sbj_c)

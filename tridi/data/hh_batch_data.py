@@ -12,6 +12,7 @@ class HHBatchData:
     second_sbj: Union[str, List[str], None] # none
     path: Union[str, List[str], None] = None
     t_stamp: Union[int, List[int], None] = None
+    interaction_label: Union[str, List[str], None] = None
     # sbj
     sbj_shape: Optional[Tensor] = None  # dim is 10
     sbj_global: Optional[Tensor] = None  # R is 6d

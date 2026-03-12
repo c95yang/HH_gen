@@ -14,6 +14,7 @@ class DenoisingModel(ModelMixin):
         name: str,
         dim_sbj: int,
         dim_second_sbj: int,
+        dim_interaction: int,
         dim_timestep_embed: int,
         dim_output: int,
         cond_channels: int = 0,
@@ -27,6 +28,7 @@ class DenoisingModel(ModelMixin):
             self.model = TransformertUni3WayModel(
                 dim_sbj=dim_sbj, 
                 dim_second_sbj=dim_second_sbj,
+                dim_interaction=dim_interaction,
                 dim_timestep_embed=dim_timestep_embed,
                 dim_output=dim_output,
                 cond_channels=cond_channels,
@@ -39,12 +41,13 @@ class DenoisingModel(ModelMixin):
             self,
             inputs: Tensor,
             t: Tensor,
-            t_second: Optional[Tensor] = None
+                t_second: Optional[Tensor] = None,
+                t_interaction: Optional[Tensor] = None,
     ) -> Tensor:
         """ Receives input of shape (B, in_channels) and returns output
             of shape (B, out_channels) """
         if self.name.endswith('unidiffuser_3'):
-            data_dim = self.model.dim_sbj + self.model.dim_second_sbj
+            data_dim = self.model.dim_sbj + self.model.dim_second_sbj + self.model.dim_interaction
             assert inputs.shape[1] >= data_dim, f"inputs dim {inputs.shape[1]} < data_dim {data_dim}"
 
             # print("Using unidiffuser 3 way model")
@@ -55,12 +58,26 @@ class DenoisingModel(ModelMixin):
                     assert cond.shape[1] == self.model.cond_channels, \
                         f"cond dim mismatch: got {cond.shape[1]} vs expected {self.model.cond_channels}"
 
-                sbj, second_sbj = torch.split(
-                    data,
-                    [self.model.dim_sbj, self.model.dim_second_sbj],  # ✅ 修正
-                    dim=1
+                split_dims = [self.model.dim_sbj, self.model.dim_second_sbj]
+                if self.model.dim_interaction > 0:
+                    split_dims.append(self.model.dim_interaction)
+                split_data = torch.split(data, split_dims, dim=1)
+
+                if self.model.dim_interaction > 0:
+                    sbj, second_sbj, interaction = split_data
+                else:
+                    sbj, second_sbj = split_data
+                    interaction = None
+
+                return self.model(
+                    sbj,
+                    second_sbj,
+                    interaction,
+                    t,
+                    t_second,
+                    t_interaction,
+                    cond,
                 )
-                return self.model(sbj, second_sbj, t, t_second, cond)
         else:
             with self.autocast_context:
                 return self.model(inputs, t)

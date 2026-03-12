@@ -181,6 +181,18 @@ def main() -> None:
         overlay_png = out_case / "overlay.png"
         _render(scene, overlay_png, use_gpu=use_gpu, samples=args.samples)
 
+        # ---------- condition ----------
+        cond_specs = []
+        for ci, p in enumerate(condition_paths):
+            cond_specs.append((p, color_condition(ci, len(condition_paths)), float(args.condition_alpha)))
+
+        if cond_specs:
+            scene.clear()
+            _add_meshes_to_scene(scene, UniformColors, PrincipledBSDFMaterial, trimesh_mod, cond_specs)
+            _setup_camera_and_lights(scene, cam_spec)
+            condition_png = out_case / "condition.png"
+            _render(scene, condition_png, use_gpu=use_gpu, samples=args.samples)
+
         # ---------- gt ----------
         gt_specs = []
         for gi, p in enumerate(gt_paths):
@@ -219,7 +231,7 @@ def main() -> None:
         copy_outputs_to_inplace(
             case_dir,
             out_case,
-            ["overlay.png", "gt.png", "pred_grid.png"] + [f"pred_rep{rep:02d}.png" for rep in selected_reps],
+            ["overlay.png", "condition.png", "gt.png", "pred_grid.png"] + [f"pred_rep{rep:02d}.png" for rep in selected_reps],
         )
 
     logger.info("Done. Global render root: %s", out_root)

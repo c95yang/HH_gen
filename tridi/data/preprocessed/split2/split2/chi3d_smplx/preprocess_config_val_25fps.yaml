@@ -1,0 +1,116 @@
+env:
+  datasets_folder: ./data/preprocessed/
+  raw_datasets_folder: ./data/raw/
+  assets_folder: ./assets/
+  experiments_folder: ./experiments
+  smpl_folder: ./data/smplx_models/
+input_type: smplh
+obj_keypoints_npoints: 1500
+align_with_joints: false
+normalize: false
+align_with_ground: false
+behave:
+  root: ./data/raw//behave/
+  target: ./data/preprocessed//behave_smplh/
+  orig_objects_path: ./data/raw//behave//objects
+  can_objects_path: ./data/raw//behave//canonicalized_objects
+  full_anno_path: ./data/raw//behave//behave-30fps-params-v1
+  split: train
+  split_file: ./data/raw//behave//split.json
+  combine_1fps_and_30fps: true
+  downsample: 10fps
+  subjects:
+  - '*'
+  objects:
+  - yogamat
+  contact_threshold: 0.02
+  generate_obj_keypoints: false
+embody3d:
+  root: ./data/raw//embody3d/
+  target: ./data/preprocessed//embody3d_smplx/
+  assets: ./assets/
+  split: train
+  split_file: ./data/raw//embody3d//split.json
+  downsample: 10fps
+  categories:
+  - '*'
+interhuman:
+  root: ./data/raw//interhuman/
+  target: ./data/preprocessed//interhuman_smpl/
+  split: train
+  split_file: ./data/raw//interhuman//split.json
+  downsample: 10fps
+chi3d:
+  root: ./data/raw//chi3d/
+  target: ./data/preprocessed//chi3d_smplx/
+  assets: ./assets/
+  split: val
+  split_file: ./data/raw//chi3d//split.json
+  downsample: 25fps
+grab:
+  root: ./data/raw//grab/
+  target: ./data/preprocessed//grab_smplh/
+  objects_path: ./data/raw//grab//tools/object_meshes/decimated_meshes
+  split: train
+  only_contact_frames: true
+  downsample: 10fps
+  use_decimated_obj_meshes: true
+  subjects:
+  - '*'
+  objects:
+  - banana
+  - binoculars
+  - camera
+  - coffeemug
+  - cup
+  - doorknob
+  - eyeglasses
+  - flute
+  - flashlight
+  - fryingpan
+  - gamecontroller
+  - hammer
+  - headphones
+  - knife
+  - lightbulb
+  - mouse
+  - mug
+  - phone
+  - teapot
+  - toothbrush
+  - wineglass
+  load_existing_sbj_meshes: false
+  generate_obj_keypoints: false
+intercap:
+  root: ./data/raw//intercap/
+  target: ./data/preprocessed//intercap_smplh/
+  objects_path: ./data/raw//intercap//tools/canonicalized_objects
+  split: train
+  use_canonicalized_obj_meshes: true
+  downsample: true
+  subjects: []
+  objects: []
+  contact_threshold: 0.05
+  object_names:
+    obj_01: suitcase
+    obj_02: skateboard
+    obj_03: ball
+    obj_04: umbrella
+    obj_05: tennisracket
+    obj_06: briefcase
+    obj_07: chair
+    obj_08: bottle
+    obj_09: cup
+    obj_10: ottoman
+  generate_obj_keypoints: false
+omomo:
+  root: ./data/raw//omomo/
+  target: ./data/preprocessed//omomo_smplh/
+  objects_path: ./data/raw//omomo//tools/canonicalized_decimated_objects
+  split: train
+  use_canonicalized_obj_meshes: true
+  downsample: true
+  subjects: []
+  objects: []
+  contact_threshold: 0.05
+  generate_obj_keypoints: false
