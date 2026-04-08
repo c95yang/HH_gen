@@ -1,5 +1,5 @@
 """
-Code to preprocess 30fps annotations for the InerHuman dataset.
+Code to preprocess 50fps annotations for the InerHuman dataset.
 """
 import argparse
 import json
